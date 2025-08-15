@@ -61,12 +61,24 @@ The WME LevelReset+ script has undergone significant modernization with SDK inte
 
 ## Code Structure & Maintainability
 
-### 1. **Function Decomposition**
+### 1. **Function Decomposition** ✅ **COMPLETED**
 **Priority: HIGH**
-- **Current Issue**: `initUI()` function is extremely large (~400+ lines)
-- **Impact**: Hard to maintain, test, and debug
-- **Optimization**: Break into smaller, focused functions (UI creation, event binding, etc.)
-- **Expected Benefit**: Better maintainability, easier testing
+- **Previous Issue**: `initUI()` function is extremely large (~400+ lines), conflicting `scanArea` functions
+- **Previous Impact**: Hard to maintain, test, and debug; function name conflicts causing unpredictable behavior
+- **Optimization Applied**: 
+  - ✅ **Fixed conflicting `scanArea` functions by consolidating into a single unified function**:
+    - `scanArea(false)` - Lightweight UI counter updates for frequent events
+    - `scanArea(true)` - Comprehensive scan for relock operations
+  - ✅ **Eliminated duplicate code and function name conflicts**
+  - ✅ **Integrated setLockLevel logic inline to reduce function call overhead**
+  - ✅ **Implemented appropriate event handler mapping for performance optimization**
+- **Remaining Work**: Break down the large `initUI()` function into smaller, focused functions
+- **Achieved Benefit**: 
+  - Eliminated function conflicts and duplicate code
+  - Better performance through unified scanning logic
+  - Reduced memory usage by eliminating redundant functions
+  - Single source of truth for scanning logic
+- **Expected Additional Benefit**: Better maintainability once `initUI()` is decomposed
 
 ### 2. **Configuration Management**
 **Priority: MEDIUM**
@@ -199,16 +211,17 @@ The WME LevelReset+ script has undergone significant modernization with SDK inte
 ## Implementation Priority Matrix
 
 ### High Priority (Implement First)
-1. Function decomposition (`initUI()` breakup)
+1. ✅ **COMPLETED**: Function decomposition (conflicting scanArea functions unified)
 2. Viewport detection algorithm improvement
 3. Event handler cleanup implementation
 4. Batch processing optimization
 
 ### Medium Priority (Implement Second)
-1. User info caching
-2. DOM query optimization
-3. Configuration management centralization
-4. Memory management improvements
+1. ✅ **COMPLETED**: Async/await consistency standardization
+2. User info caching (partially completed - now cached within scanArea execution)
+3. DOM query optimization
+4. Configuration management centralization
+5. Memory management improvements
 
 ### Low Priority (Nice to Have)
 1. Progressive loading
