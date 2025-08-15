@@ -129,14 +129,16 @@
         }
     };
 
+    /**
+    * Async delay utility function
+    * @param {number} ms - Milliseconds to wait
+    * @returns {Promise<void>}
+    */
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
     // Initialize LevelReset and do some checks
     function LevelReset_bootstrap() {
-        /**
-         * Async delay utility function
-         * @param {number} ms - Milliseconds to wait
-         * @returns {Promise<void>}
-         */
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 
         const initializeSDK = async () => {
             try {
@@ -641,7 +643,7 @@
 
                 // Choose country lock settings
                 let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : defaultLocks;
-                console.log("LevelReset: Rules to be used", ABBR);
+                console.debug("LevelReset: Rules to be used", ABBR);
 
                 // Disable unchecked road types
                 $.each(roadTypeConfig, function (key, value) {
@@ -952,7 +954,7 @@
             } else {
                 ErrorHandler.handle('Top country not found or invalid', 'Country Retrieval in initUI', ErrorHandler.SEVERITY.ERROR);
             }
-            
+
             if (countryRules) {
                 $.each(countryRules, function (key, value) {
                     if (key == "CountryName") return false;
@@ -1053,7 +1055,7 @@
             const scanHandler = () => scanArea(); // All events now use the same handler
 
             // Register for map data changes
-            registerEventHandler("wme-map-data-loaded", scanHandler);
+            //registerEventHandler("wme-map-data-loaded", scanHandler);
 
             // Register for map movements
             registerEventHandler("wme-map-move-end", scanHandler);
