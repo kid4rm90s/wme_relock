@@ -184,14 +184,18 @@
         };
 
         // Main initialization flow
-        const waitForSDK = () => {
-            if (unsafeWindow.SDK_INITIALIZED) {
-                unsafeWindow.SDK_INITIALIZED
-                    .then(initializeSDK)
-                    .catch(err => ErrorHandler.handle(err, 'SDK Promise', ErrorHandler.SEVERITY.CRITICAL, true));
-            } else {
-                // Retry after a short delay
-                setTimeout(waitForSDK, 500);
+        const waitForSDK = async () => {
+            try {
+                if (unsafeWindow.SDK_INITIALIZED) {
+                    await unsafeWindow.SDK_INITIALIZED;
+                    await initializeSDK();
+                } else {
+                    // Retry after a short delay
+                    await delay(500);
+                    waitForSDK();
+                }
+            } catch (err) {
+                ErrorHandler.handle(err, 'SDK Promise', ErrorHandler.SEVERITY.CRITICAL, true);
             }
         };
 
@@ -308,6 +312,14 @@
         let rulesDB = {};
 
         // Helper functions using SDK methods
+        
+        /**
+         * Async delay utility function
+         * @param {number} ms - Milliseconds to wait
+         * @returns {Promise<void>}
+         */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        
         function onScreen(obj) {
             if (!obj || !obj.geometry) return false;
 
@@ -477,23 +489,34 @@
             w.location = res.finalUrl;
         }
 
-        function sendHTTPRequest(url, callback) {
-            GM_xmlhttpRequest({
-                url: url,
-                method: 'GET',
-                timeout: requestsTimeout,
-                onload: function (res) {
-                    callback(res);
-                },
-                onreadystatechange: function (res) {
-                    // fill if needed
-                },
-                ontimeout: function (res) {
-                    ErrorHandler.handle('Request timeout', 'HTTP Request', ErrorHandler.SEVERITY.ERROR, true);
-                },
-                onerror: function (res) {
-                    ErrorHandler.handle('Request error', 'HTTP Request', ErrorHandler.SEVERITY.ERROR, true);
-                }
+        /**
+         * Send HTTP request using async/await pattern
+         * @param {string} url - URL to request
+         * @returns {Promise<Object>} Response object
+         */
+        async function sendHTTPRequest(url) {
+            return new Promise((resolve, reject) => {
+                GM_xmlhttpRequest({
+                    url: url,
+                    method: 'GET',
+                    timeout: requestsTimeout,
+                    onload: function (res) {
+                        resolve(res);
+                    },
+                    onreadystatechange: function (res) {
+                        // fill if needed
+                    },
+                    ontimeout: function (res) {
+                        const error = new Error('Request timeout');
+                        ErrorHandler.handle(error, 'HTTP Request', ErrorHandler.SEVERITY.ERROR, true);
+                        reject(error);
+                    },
+                    onerror: function (res) {
+                        const error = new Error('Request error');
+                        ErrorHandler.handle(error, 'HTTP Request', ErrorHandler.SEVERITY.ERROR, true);
+                        reject(error);
+                    }
+                });
             });
         }
 
@@ -539,12 +562,8 @@
             try {
                 const url = `https://script.google.com/macros/s/${rulesHash}/exec?func=getAllLockRulesV2`;
 
-                // Wrap the callback-based request in a promise
-                const response = await new Promise((resolve, reject) => {
-                    sendHTTPRequest(url, resolve);
-                    // Add timeout
-                    setTimeout(() => reject(new Error('Request timeout')), requestsTimeout);
-                });
+                // Use the async HTTP request function
+                const response = await sendHTTPRequest(url);
 
                 if (!validateHTTPResponse(response)) {
                     throw new Error('Invalid response received');
@@ -958,7 +977,7 @@
 
                         // Small delay to prevent overwhelming the system
                         if (i % 10 === 0) {
-                            await new Promise(resolve => setTimeout(resolve, 100));
+                            await delay(100);
                         }
                     } catch (err) {
                         console.error('LevelReset: Error updating feature:', err);
@@ -1005,7 +1024,7 @@
 
                             // Small delay every 10 updates to prevent overwhelming the system
                             if (processed % 10 === 0) {
-                                await new Promise(resolve => setTimeout(resolve, 100));
+                                await delay(100);
                             }
                         } catch (err) {
                             console.error('LevelReset: Error updating feature:', err);
