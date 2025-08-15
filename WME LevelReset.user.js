@@ -64,22 +64,22 @@
             const errorMsg = error instanceof Error ? error.message : String(error);
             const fullMessage = `${prefix} [${context}] ${errorMsg}`;
             
-            // Log to console based on severity
+            // Log to console based on severity - always show stack trace for better debugging
             switch (severity) {
                 case this.SEVERITY.CRITICAL:
                     console.error(fullMessage, error instanceof Error ? error.stack : '', additionalInfo);
                     break;
                 case this.SEVERITY.ERROR:
-                    console.error(fullMessage, additionalInfo);
+                    console.error(fullMessage, error instanceof Error ? error.stack : '', additionalInfo);
                     break;
                 case this.SEVERITY.WARNING:
-                    console.warn(fullMessage, additionalInfo);
+                    console.warn(fullMessage, error instanceof Error ? error.stack : '', additionalInfo);
                     break;
                 case this.SEVERITY.INFO:
                     console.log(fullMessage, additionalInfo);
                     break;
                 default:
-                    console.error(fullMessage, additionalInfo);
+                    console.error(fullMessage, error instanceof Error ? error.stack : '', additionalInfo);
             }
 
             // Show user-facing alert for critical errors or when explicitly requested
