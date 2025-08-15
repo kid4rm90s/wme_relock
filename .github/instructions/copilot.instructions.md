@@ -6,9 +6,10 @@ applyTo: '**/*.js'
 
 ## Project Overview
 WME LevelReset+ is a Tampermonkey userscript that automatically corrects lock levels of road segments and POIs in the Waze Map Editor based on external rules stored in Google Sheets. Key features:
+- **SDK-Dependent**: Requires WME JavaScript SDK - script will not function without it
 - Fetches locking rules from external Google Sheets API (`script.googleusercontent.com`)
 - Supports city-scoped rules and multiple road types (including Ukraine-specific rules)
-- Uses WME JavaScript SDK for all WME interactions
+- Uses WME JavaScript SDK for all WME interactions (no fallback mechanisms)
 - Provides UI in WME sidebar for batch re-locking operations
 
 ## Architecture & Data Flow
@@ -36,15 +37,23 @@ WME LevelReset+ is a Tampermonkey userscript that automatically corrects lock le
    - Creates individual SDK update actions for each segment/venue
 
 ### Road Type Mapping
-Uses `streets` object mapping numeric road type IDs to internal type names:
+**CRITICAL REQUIREMENT**: Script depends entirely on SDK availability - no fallback mechanisms needed.
+
+Uses dynamic `streets` object populated from `wmeSDK.DataModel.Segments.getRoadTypes()`:
 ```js
-const streets = {
-  1: { typeName: "Street", scan: true, sdkType: "STREET" },
-  3: { typeName: "Freeway", scan: true, sdkType: "FREEWAY" },
-  90000: { typeName: "POI", scan: true, sdkType: null } // Special POI handling
-}
+// Dynamic road type mapping loaded from SDK
+let streets = {};
+
+// Initialized via: streets = initializeRoadTypes();
+// Structure: { [roadTypeId]: { typeName: "Street", scan: true, sdkType: roadTypeId } }
+// Special case: { 90000: { typeName: "POI", scan: true, sdkType: null } }
 ```
-Note: Numeric IDs are used because SDK RoadTypeId constants are not directly accessible in the userscript context.
+
+Road types are:
+- **Dynamically loaded** from SDK during initialization
+- **Locale-aware** - names change based on user's WME language
+- **Auto-updating** - includes new road types added to WME
+- **SDK-dependent** - script will not function without working SDK
 
 ## Critical SDK Usage Patterns
 

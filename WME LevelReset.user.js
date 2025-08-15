@@ -32,7 +32,8 @@
         RESPECT_ROUTING: 'Relock_respectRouting',
         ELM_PREFIX: 'Relock_',
         ELM_CHK: '_chk',
-        ELM_VALUE: '_value'
+        ELM_VALUE: '_value',
+        ROAD_TYPE_VALUE: '_road_type_value'
     };
 
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -263,94 +264,44 @@
             Stairway: 1
         };
 
-        // Road types mapped to numeric IDs (since SDK RoadTypeId constants are not accessible)
-        const streets = {
-            // Special type for POIs
-            90000: {
-                typeName: "POI",
-                scan: true,
-                sdkType: null // POIs are handled separately
-            },
-            // Street types using numeric road type IDs
-            1: {
-                typeName: "Street",
-                scan: true,
-                sdkType: "STREET"
-            },
-            2: {
-                typeName: "Primary",
-                scan: true,
-                sdkType: "PRIMARY_STREET"
-            },
-            3: {
-                typeName: "Freeway",
-                scan: true,
-                sdkType: "FREEWAY"
-            },
-            4: {
-                typeName: "Ramp",
-                scan: true,
-                sdkType: "RAMP"
-            },
-            6: {
-                typeName: "Major",
-                scan: true,
-                sdkType: "MAJOR_HIGHWAY"
-            },
-            7: {
-                typeName: "Minor",
-                scan: true,
-                sdkType: "MINOR_HIGHWAY"
-            },
-            8: {
-                typeName: "Offroad",
-                scan: true,
-                sdkType: "OFF_ROAD"
-            },
-            10: {
-                typeName: "Parking",
-                scan: true,
-                sdkType: "PARKING_LOT_ROAD"
-            },
-            16: {
-                typeName: "Private",
-                scan: true,
-                sdkType: "PRIVATE_ROAD"
-            },
-            17: {
-                typeName: "Railroad",
-                scan: true,
-                sdkType: "RAILROAD"
-            },
-            18: {
-                typeName: "Boardwalk",
-                scan: true,
-                sdkType: "BOARDWALK"
-            },
-            19: {
-                typeName: "Trail",
-                scan: true,
-                sdkType: "TRAIL"
-            },
-            20: {
-                typeName: "Stairway",
-                scan: true,
-                sdkType: "STAIRWAY"
-            },
-            22: {
-                typeName: "Alley",
-                scan: true,
-                sdkType: "ALLEY"
-            }
-        };
-        let relockObject = {};
-        // Get user rank properly from SDK state
-        const userInfo = wmeSDK.State.getUserInfo();
-        if (!userInfo) {
-            ErrorHandler.handle('Unable to get user info', 'User Info Retrieval', ErrorHandler.SEVERITY.CRITICAL, true);
-            return;
+        // Get road types dynamically from SDK instead of hardcoded mapping
+        // MAJOR CHANGE: Now using wmeSDK.DataModel.Segments.getRoadTypes() for dynamic road type mapping
+        // This replaces the previous hardcoded streets{} structure and makes the script more adaptable
+        // to locale changes and WME updates. SDK availability is mandatory - no fallbacks needed.
+        // Road types are loaded once during initialization and don't change during the session.
+        let roadTypeConfig = {};
+        
+        /**
+         * Initialize road types from SDK
+         * @returns {Object} Road types object with structure: {id: {typeName, scan, sdkType}}
+         */
+        function initializeRoadTypes() {
+            return ErrorHandler.wrapSync(() => {
+                const roadTypes = wmeSDK.DataModel.Segments.getRoadTypes();
+                const streetTypesMap = {};
+                
+                // Add all road types from SDK
+                roadTypes.forEach(roadType => {
+                    streetTypesMap[roadType.id] = {
+                        typeName: roadType.name,
+                        scan: true,
+                        sdkType: roadType.id  // Use the actual SDK road type ID
+                    };
+                });
+                
+                // Add special type for POIs (not in SDK road types)
+                streetTypesMap[90000] = {
+                    typeName: "POI",
+                    scan: true,
+                    sdkType: null // POIs are handled separately
+                };
+                
+                console.log('LevelReset: Initialized', Object.keys(streetTypesMap).length, 'road types from SDK');
+                return streetTypesMap;
+            }, 'Road Types Initialization', ErrorHandler.SEVERITY.CRITICAL)(); // Critical error if this fails
         }
-        const userlevel = userInfo.rank + 1;
+        
+        let relockObject = {};
 
         const requestsTimeout = 20000; // in ms
         const rulesHash = "AKfycbzKgUQL7cY6XMBlykq0JzJAPc1B26sKEAnG1RJokA9Wpgf_W0oZJwMKcrhA13LrUbvj";
@@ -482,14 +433,12 @@
             return ErrorHandler.wrapSync(() => {
                 // If respecting routing road type is enabled, check that first
                 if (localStorage.getItem(ID_KEYS.RESPECT_ROUTING) === 'true' && segment.routingRoadType) {
-                    const routingType = Object.values(streets).find(s =>
-                        s.sdkType && segment.routingRoadType === parseInt(Object.keys(streets).find(key => streets[key] === s))
-                    );
+                    const routingType = roadTypeConfig[segment.routingRoadType];
                     if (routingType) return routingType.typeName;
                 }
 
                 // Fall back to regular road type
-                const roadType = streets[segment.roadType];
+                const roadType = roadTypeConfig[segment.roadType];
                 return roadType ? roadType.typeName : null;
             }, 'Road Type Determination', ErrorHandler.SEVERITY.WARNING, null)();
         }
@@ -588,7 +537,7 @@
          */
         async function getAllLockRules() {
             try {
-                const url = `https://script.google.com/macros/s/${rulesHash}/exec?func=getAllLockRules`;
+                const url = `https://script.google.com/macros/s/${rulesHash}/exec?func=getAllLockRulesV2`;
 
                 // Wrap the callback-based request in a promise
                 const response = await new Promise((resolve, reject) => {
@@ -624,7 +573,7 @@
 
             // Reset counters
             const counts = {};
-            Object.values(streets).forEach(type => {
+            Object.values(roadTypeConfig).forEach(type => {
                 counts[type.typeName] = 0;
             });
 
@@ -635,7 +584,7 @@
                 const roadType = getRoadType(segment);
                 if (!roadType) continue;
 
-                const streetType = Object.values(streets).find(s => s.typeName === roadType);
+                const streetType = Object.values(roadTypeConfig).find(s => s.typeName === roadType);
                 if (!streetType || !streetType.scan) continue;
 
                 counts[roadType]++;
@@ -661,6 +610,10 @@
 
         async function initUI(rules) {
             rulesDB = rules;
+            
+            // Initialize road types from SDK now that it's ready
+            roadTypeConfig = initializeRoadTypes();
+            console.log('LevelReset: Road types initialized:', Object.keys(roadTypeConfig).length, 'types found');
 
             // Create sidebar tab (registerScriptTab returns a Promise)
             const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab({
@@ -746,7 +699,7 @@
             resultsCntr.style.cssText = 'margin-right:5px;';
 
             // add results empty list
-            $.each(streets, function (key, value) {
+            $.each(roadTypeConfig, function (key, value) {
                 let __cntr = document.createElement('div'),
                     __keyLeft = document.createElement('div'),
                     __prntRight = document.createElement('div'),
@@ -1101,6 +1054,12 @@
         }
 
         function setLockLevel(feature, scanObj, desiredLockLevel) {
+            const userInfo = wmeSDK.State.getUserInfo();
+            if (!userInfo) {
+                ErrorHandler.handle('Unable to get user info', 'User Info Retrieval', ErrorHandler.SEVERITY.CRITICAL, true);
+                return;
+            }
+            const userlevel = userInfo.rank + 1;
             const includeAllSegments = document.getElementById('_allSegments');
             const allSegmentsInclude = includeAllSegments.checked && userlevel > 4;
             if (userlevel > desiredLockLevel) {
@@ -1128,9 +1087,16 @@
             hideInactiveCities();
 
             // Object with array of road types, to collect each wrongly locked segment, for later use
-            $.each(defaultLocks, function (k, v) {
-                relockObject[k] = [];
+            // Use dynamic road types from SDK instead of hardcoded defaultLocks
+            Object.values(roadTypeConfig).forEach(function (street) {
+                if (street.typeName && defaultLocks[street.typeName] !== undefined) {
+                    relockObject[street.typeName] = [];
+                }
             });
+            // Ensure POI is always included
+            if (!relockObject["POI"]) {
+                relockObject["POI"] = [];
+            }
 
             let foundBadlocks = false;
             let respectRoutingRoadType = respectRouting.checked;
@@ -1148,14 +1114,14 @@
             relockSubTitle.innerHTML = 'Results (limit: ' + limitCount + ')';
 
             // disable unchecked road types
-            $.each(streets, function (key, value) {
+            $.each(roadTypeConfig, function (key, value) {
                 let idPrefix = ID_KEYS.ELM_PREFIX + value.typeName + ID_KEYS.ELM_CHK;
                 let chk = document.getElementById(idPrefix);
                 value.scan = (chk && chk.checked);
             });
 
             // ============== POI ===========================
-            if (streets["90000"].scan) {
+            if (roadTypeConfig["90000"].scan) {
                 let scanObj = "POI";
                 const venues = wmeSDK.DataModel.Venues.getAll();
                 venues.forEach(venue => {
@@ -1175,7 +1141,7 @@
             }
             /*
             // ============== Cameras ===========================
-            if (streets["90001"].scan) {
+            if (roadTypeConfig["90001"].scan) {
                 let scanObj = "Camera";
                 $.each(W.model.cameras.objects, function (k, v) {
                     if (count < limitCount && v.type == "camera" && onScreen(v) && v.isGeometryEditable()) {
@@ -1191,7 +1157,7 @@
                 });
             }
             // ============== Railroad Crossings ===========================
-            if (streets["90002"].scan) {
+            if (roadTypeConfig["90002"].scan) {
                 let scanObj = "RailroadCrossing";
                 $.each(W.model.railroadCrossings.objects, function (k, v) {
                     if (count < limitCount && v.type == "railroadCrossing" && onScreen(v) && v.isGeometryEditable()) {
@@ -1227,7 +1193,7 @@
                             ? segment.routingRoadType
                             : segment.roadType;
 
-                        const curStreet = streets[effectiveRoadType];
+                        const curStreet = roadTypeConfig[effectiveRoadType];
                         if (!curStreet || !curStreet.scan) continue;
 
                         let cityID = null;
