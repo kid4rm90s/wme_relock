@@ -40,6 +40,97 @@
     // Global SDK instance - initialized once and used by all functions
     let wmeSDK;
 
+    // Centralized error handling system
+    const ErrorHandler = {
+        // Error severity levels
+        SEVERITY: {
+            CRITICAL: 'critical',    // Fatal errors that prevent script from working
+            ERROR: 'error',          // Errors that affect functionality but allow continuation
+            WARNING: 'warning',      // Warnings about potential issues
+            INFO: 'info'            // Informational messages
+        },
+
+        /**
+         * Central error logging and handling function
+         * @param {Error|string} error - Error object or message
+         * @param {string} context - Context where error occurred (function name, operation)
+         * @param {string} severity - Error severity level
+         * @param {boolean} showUser - Whether to show error to user via alert
+         * @param {Object} additionalInfo - Additional context information
+         */
+        handle(error, context = 'Unknown', severity = this.SEVERITY.ERROR, showUser = false, additionalInfo = {}) {
+            const prefix = 'LevelReset:';
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            const fullMessage = `${prefix} [${context}] ${errorMsg}`;
+            
+            // Log to console based on severity
+            switch (severity) {
+                case this.SEVERITY.CRITICAL:
+                    console.error(fullMessage, error instanceof Error ? error.stack : '', additionalInfo);
+                    break;
+                case this.SEVERITY.ERROR:
+                    console.error(fullMessage, additionalInfo);
+                    break;
+                case this.SEVERITY.WARNING:
+                    console.warn(fullMessage, additionalInfo);
+                    break;
+                case this.SEVERITY.INFO:
+                    console.log(fullMessage, additionalInfo);
+                    break;
+                default:
+                    console.error(fullMessage, additionalInfo);
+            }
+
+            // Show user-facing alert for critical errors or when explicitly requested
+            if (showUser || severity === this.SEVERITY.CRITICAL) {
+                const userMessage = severity === this.SEVERITY.CRITICAL 
+                    ? `${prefix} Critical Error in ${context}\n${errorMsg}\n\nScript may not function properly.`
+                    : `${prefix} ${context}\n${errorMsg}`;
+                alert(userMessage);
+            }
+
+            // Return false for boolean operations, null for others
+            return false;
+        },
+
+        /**
+         * Wrap async functions with error handling
+         * @param {Function} asyncFn - Async function to wrap
+         * @param {string} context - Context for error reporting
+         * @param {string} severity - Default severity level
+         * @returns {Function} - Wrapped function with error handling
+         */
+        wrapAsync(asyncFn, context, severity = this.SEVERITY.ERROR) {
+            return async (...args) => {
+                try {
+                    return await asyncFn(...args);
+                } catch (error) {
+                    this.handle(error, context, severity);
+                    return null;
+                }
+            };
+        },
+
+        /**
+         * Create a try/catch wrapper for synchronous functions
+         * @param {Function} fn - Function to wrap
+         * @param {string} context - Context for error reporting
+         * @param {string} severity - Default severity level
+         * @param {*} defaultReturn - Default return value on error
+         * @returns {Function} - Wrapped function with error handling
+         */
+        wrapSync(fn, context, severity = this.SEVERITY.ERROR, defaultReturn = false) {
+            return (...args) => {
+                try {
+                    return fn(...args);
+                } catch (error) {
+                    this.handle(error, context, severity);
+                    return defaultReturn;
+                }
+            };
+        }
+    };
+
     // Initialize LevelReset and do some checks
     function LevelReset_bootstrap() {
         const initializeSDK = async () => {
@@ -79,8 +170,9 @@
                 await LevelReset_init();
 
             } catch (error) {
-                console.error('LevelReset: Initialization failed:', error);
-                // Display user-friendly error in WME
+                ErrorHandler.handle(error, 'SDK Initialization', ErrorHandler.SEVERITY.CRITICAL, true);
+                
+                // Display user-friendly error in WME if available
                 if (typeof WazeWrap !== 'undefined') {
                     WazeWrap.Alerts.error(
                         'WME LevelReset+ Error',
@@ -93,8 +185,9 @@
         // Main initialization flow
         const waitForSDK = () => {
             if (unsafeWindow.SDK_INITIALIZED) {
-                unsafeWindow.SDK_INITIALIZED.then(initializeSDK)
-                    .catch(err => console.error('LevelReset: SDK initialization failed:', err));
+                unsafeWindow.SDK_INITIALIZED
+                    .then(initializeSDK)
+                    .catch(err => ErrorHandler.handle(err, 'SDK Promise', ErrorHandler.SEVERITY.CRITICAL, true));
             } else {
                 // Retry after a short delay
                 setTimeout(waitForSDK, 500);
@@ -134,15 +227,15 @@
             try {
                 GM_addStyle(lrStyle.join('\n'));
             } catch (styleError) {
-                console.error('LevelReset: Failed to add styles:', styleError);
+                ErrorHandler.handle(styleError, 'Style Injection', ErrorHandler.SEVERITY.WARNING);
                 // Fallback to basic styling if GM_addStyle fails
                 const style = document.createElement('style');
                 style.textContent = lrStyle.join('\n');
                 document.head.appendChild(style);
             }
         } catch (error) {
-            console.error('LevelReset: Initialization error:', error);
-            throw error;
+            ErrorHandler.handle(error, 'Main Initialization', ErrorHandler.SEVERITY.CRITICAL, true);
+            return;
         }
 
         // Script metadata and resources
@@ -254,7 +347,7 @@
         // Get user rank properly from SDK state
         const userInfo = wmeSDK.State.getUserInfo();
         if (!userInfo) {
-            console.error('LevelReset: Unable to get user info');
+            ErrorHandler.handle('Unable to get user info', 'User Info Retrieval', ErrorHandler.SEVERITY.CRITICAL, true);
             return;
         }
         const userlevel = userInfo.rank + 1;
@@ -267,7 +360,7 @@
         function onScreen(obj) {
             if (!obj || !obj.geometry) return false;
 
-            try {
+            return ErrorHandler.wrapSync(() => {
                 // Since SDK doesn't provide isFeatureVisibleOnMap, implement basic viewport check
                 // For now, return true as a fallback - in a real implementation you'd calculate map bounds
                 // using the map center and zoom level
@@ -301,32 +394,23 @@
                     });
                 }
                 return true; // Default to visible if we can't determine
-            } catch (err) {
-                console.error('LevelReset: Error checking if feature is visible:', err);
-                return true; // Default to visible on error
-            }
+            }, 'Viewport Visibility Check', ErrorHandler.SEVERITY.WARNING, true)();
         }
 
         function hasPendingUR(venueId) {
-            try {
+            return ErrorHandler.wrapSync(() => {
                 const requests = wmeSDK.DataModel.MapUpdateRequests.getAll();
                 return requests.some(req => req.venueId === venueId);
-            } catch (err) {
-                console.error('LevelReset: Error checking venue update requests:', err);
-                return false;
-            }
+            }, 'Update Request Check', ErrorHandler.SEVERITY.WARNING, false)();
         }
 
         function isVenueEditable(venue) {
             if (!venue || !venue.id) return false;
 
-            try {
+            return ErrorHandler.wrapSync(() => {
                 // Check if venue is not ad-locked and user has edit permissions
                 return !venue.isAdLocked && wmeSDK.DataModel.Venues.hasPermissions("EDIT_GEOMETRY", venue.id);
-            } catch (err) {
-                console.error('LevelReset: Error checking venue editability:', err);
-                return false;
-            }
+            }, 'Venue Editability Check', ErrorHandler.SEVERITY.WARNING, false)();
         }
 
         /**
@@ -341,7 +425,7 @@
             try {
                 // Verify permissions first
                 if (!wmeSDK.DataModel.Segments.hasPermissions("EDIT_GEOMETRY", segment.id)) {
-                    console.warn('LevelReset: No permission to edit segment:', segment.id);
+                    ErrorHandler.handle(`No permission to edit segment: ${segment.id}`, 'Segment Permission Check', ErrorHandler.SEVERITY.WARNING);
                     return false;
                 }
 
@@ -353,7 +437,7 @@
 
                 return true;
             } catch (err) {
-                console.error('LevelReset: Error updating segment lock:', err);
+                ErrorHandler.handle(err, 'Segment Lock Update', ErrorHandler.SEVERITY.ERROR);
                 return false;
             }
         }
@@ -370,7 +454,7 @@
             try {
                 // Verify permissions first
                 if (!wmeSDK.DataModel.Venues.hasPermissions("EDIT_GEOMETRY", venue.id)) {
-                    console.warn('LevelReset: No permission to edit venue:', venue.id);
+                    ErrorHandler.handle(`No permission to edit venue: ${venue.id}`, 'Venue Permission Check', ErrorHandler.SEVERITY.WARNING);
                     return false;
                 }
 
@@ -382,7 +466,7 @@
 
                 return true;
             } catch (err) {
-                console.error('LevelReset: Error updating venue lock:', err);
+                ErrorHandler.handle(err, 'Venue Lock Update', ErrorHandler.SEVERITY.ERROR);
                 return false;
             }
         }
@@ -395,7 +479,7 @@
         function getRoadType(segment) {
             if (!segment || !segment.roadType) return null;
 
-            try {
+            return ErrorHandler.wrapSync(() => {
                 // If respecting routing road type is enabled, check that first
                 if (localStorage.getItem(ID_KEYS.RESPECT_ROUTING) === 'true' && segment.routingRoadType) {
                     const routingType = Object.values(streets).find(s =>
@@ -407,10 +491,7 @@
                 // Fall back to regular road type
                 const roadType = streets[segment.roadType];
                 return roadType ? roadType.typeName : null;
-            } catch (err) {
-                console.error('LevelReset: Error determining road type:', err);
-                return null;
-            }
+            }, 'Road Type Determination', ErrorHandler.SEVERITY.WARNING, null)();
         }
 
         /**
@@ -424,22 +505,21 @@
                 return false;
             }
 
-            try {
+            return ErrorHandler.wrapSync(() => {
                 const resetHigher = localStorage.getItem(ID_KEYS.ALL_SEGMENTS) === 'true';
                 // Reset if current lock is lower OR if resetHigher is enabled
                 return obj.lockRank < targetLock || (resetHigher && obj.lockRank > targetLock);
-            } catch (err) {
-                console.error('LevelReset: Error checking lock reset condition:', err);
-                return false;
-            }
+            }, 'Lock Reset Condition Check', ErrorHandler.SEVERITY.WARNING, false)();
         }
 
         function displayHtmlPage(res) {
             if (res.responseText.match(/Authorization needed/) || res.responseText.match(/ServiceLogin/)) {
-                alert("LevelReset:\n" +
-                    "Authorization is required for using this script. This is one time action.\n" +
-                    "Now you will be redirected to the authorization page, where you'll need to approve request.\n" +
-                    "After confirmation, please close the page and reload WME.");
+                ErrorHandler.handle(
+                    "Authorization is required for using this script. This is one time action.\nNow you will be redirected to the authorization page, where you'll need to approve request.\nAfter confirmation, please close the page and reload WME.",
+                    'Authorization Required',
+                    ErrorHandler.SEVERITY.INFO,
+                    true
+                );
             }
             let w = window.open();
             w.document.open();
@@ -460,10 +540,10 @@
                     // fill if needed
                 },
                 ontimeout: function (res) {
-                    alert("LevelReset: Sorry, request timeout!");
+                    ErrorHandler.handle('Request timeout', 'HTTP Request', ErrorHandler.SEVERITY.ERROR, true);
                 },
                 onerror: function (res) {
-                    alert("LevelReset: Sorry, request error!");
+                    ErrorHandler.handle('Request error', 'HTTP Request', ErrorHandler.SEVERITY.ERROR, true);
                 }
             });
         }
@@ -483,18 +563,21 @@
                         break;
                     default:
                         displayError = false;
-                        alert("LevelReset Error: unsupported status code - " + res.status);
-                        console.log("LevelReset: " + res.responseHeaders);
-                        console.log("LevelReset: " + res.responseText);
+                        ErrorHandler.handle(`Unsupported status code: ${res.status}`, 'HTTP Response Validation', ErrorHandler.SEVERITY.ERROR, true, {
+                            headers: res.responseHeaders,
+                            response: res.responseText
+                        });
                         break;
                 }
             } else {
                 displayError = false;
-                alert("LevelReset error: Response is empty!");
+                ErrorHandler.handle('Response is empty', 'HTTP Response Validation', ErrorHandler.SEVERITY.ERROR, true);
             }
 
             if (displayError) {
-                alert("LevelReset: Error processing request. Response: " + res.responseText);
+                ErrorHandler.handle('Error processing request', 'HTTP Response Validation', ErrorHandler.SEVERITY.ERROR, true, {
+                    response: res.responseText
+                });
             }
             return result;
         }
@@ -527,8 +610,7 @@
                 await initUI(data.rules);
 
             } catch (err) {
-                console.error('LevelReset: Failed to get locking rules:', err);
-                alert("LevelReset: Error getting locking rules! " + err.message);
+                ErrorHandler.handle(err, 'Lock Rules Fetching', ErrorHandler.SEVERITY.ERROR, true);
             }
         }
 
@@ -536,51 +618,46 @@
          * Scan visible area for segments and venues
          * @returns {Promise<void>}
          */
-        async function scanArea() {
-            try {
-                const segments = wmeSDK.DataModel.Segments.getAll();
-                const venues = wmeSDK.DataModel.Venues.getAll();
+        const scanArea = ErrorHandler.wrapAsync(async () => {
+            const segments = wmeSDK.DataModel.Segments.getAll();
+            const venues = wmeSDK.DataModel.Venues.getAll();
 
-                // Reset counters
-                const counts = {};
-                Object.values(streets).forEach(type => {
-                    counts[type.typeName] = 0;
-                });
+            // Reset counters
+            const counts = {};
+            Object.values(streets).forEach(type => {
+                counts[type.typeName] = 0;
+            });
 
-                // Process segments
-                for (const segment of segments) {
-                    if (!onScreen(segment)) continue;
+            // Process segments
+            for (const segment of segments) {
+                if (!onScreen(segment)) continue;
 
-                    const roadType = getRoadType(segment);
-                    if (!roadType) continue;
+                const roadType = getRoadType(segment);
+                if (!roadType) continue;
 
-                    const streetType = Object.values(streets).find(s => s.typeName === roadType);
-                    if (!streetType || !streetType.scan) continue;
+                const streetType = Object.values(streets).find(s => s.typeName === roadType);
+                if (!streetType || !streetType.scan) continue;
 
-                    counts[roadType]++;
-                }
-
-                // Process venues (POIs)
-                for (const venue of venues) {
-                    if (!onScreen(venue)) continue;
-                    if (!isVenueEditable(venue)) continue;
-                    if (hasPendingUR(venue.id)) continue;
-
-                    counts["POI"]++;
-                }
-
-                // Update UI with counts
-                Object.entries(counts).forEach(([typeName, count]) => {
-                    const valueElement = document.getElementById(ID_KEYS.ELM_PREFIX + typeName + ID_KEYS.ROAD_TYPE_VALUE);
-                    if (valueElement) {
-                        valueElement.innerHTML = count || '-';
-                    }
-                });
-
-            } catch (err) {
-                console.error('LevelReset: Error scanning area:', err);
+                counts[roadType]++;
             }
-        }
+
+            // Process venues (POIs)
+            for (const venue of venues) {
+                if (!onScreen(venue)) continue;
+                if (!isVenueEditable(venue)) continue;
+                if (hasPendingUR(venue.id)) continue;
+
+                counts["POI"]++;
+            }
+
+            // Update UI with counts
+            Object.entries(counts).forEach(([typeName, count]) => {
+                const valueElement = document.getElementById(ID_KEYS.ELM_PREFIX + typeName + ID_KEYS.ROAD_TYPE_VALUE);
+                if (valueElement) {
+                    valueElement.innerHTML = count || '-';
+                }
+            });
+        }, 'Area Scanning', ErrorHandler.SEVERITY.WARNING);
 
         async function initUI(rules) {
             rulesDB = rules;
@@ -814,23 +891,18 @@
             const eventHandlers = [];
 
             function registerEventHandler(eventName, handler) {
-                try {
+                return ErrorHandler.wrapSync(() => {
                     const subscription = wmeSDK.Events.on({
                         eventName: eventName,
                         eventHandler: handler
                     });
                     eventHandlers.push(subscription);
-                } catch (err) {
-                    console.error(`LevelReset: Failed to register ${eventName} handler:`, err);
-                }
+                    return subscription;
+                }, `Event Handler Registration (${eventName})`, ErrorHandler.SEVERITY.ERROR, null)();
             }
 
             // Handler wrapper for async scanArea
-            const asyncScanHandler = () => {
-                scanArea().catch(err => {
-                    console.error('LevelReset: Error in scan handler:', err);
-                });
-            };
+            const asyncScanHandler = scanArea;
 
             // Register for map data changes
             registerEventHandler("wme-map-data-loaded", asyncScanHandler);
@@ -901,9 +973,7 @@
 
             // Initial scan
             relockShowAlert();
-            scanArea().catch(err => {
-                console.error('LevelReset: Error in initial scan:', err);
-            });
+            asyncScanHandler();
         }
 
         async function relock(obj, key) {
