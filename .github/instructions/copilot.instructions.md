@@ -1,3 +1,7 @@
+---
+applyTo: '**/*.js'
+---
+
 # Copilot Instructions for WME LevelReset
 
 ## Project Overview
