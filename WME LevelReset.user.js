@@ -37,7 +37,7 @@
     };
 
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    
+
     // Global SDK instance - initialized once and used by all functions
     let wmeSDK;
 
@@ -56,14 +56,13 @@
          * @param {Error|string} error - Error object or message
          * @param {string} context - Context where error occurred (function name, operation)
          * @param {string} severity - Error severity level
-         * @param {boolean} showUser - Whether to show error to user via alert
          * @param {Object} additionalInfo - Additional context information
          */
-        handle(error, context = 'Unknown', severity = this.SEVERITY.ERROR, showUser = false, additionalInfo = {}) {
+        handle(error, context = 'Unknown', severity = this.SEVERITY.ERROR, additionalInfo = {}) {
             const prefix = 'LevelReset:';
             const errorMsg = error instanceof Error ? error.message : String(error);
             const fullMessage = `${prefix} [${context}] ${errorMsg}`;
-            
+
             // Log to console based on severity - always show stack trace for better debugging
             switch (severity) {
                 case this.SEVERITY.CRITICAL:
@@ -83,10 +82,8 @@
             }
 
             // Show user-facing alert for critical errors or when explicitly requested
-            if (showUser || severity === this.SEVERITY.CRITICAL) {
-                const userMessage = severity === this.SEVERITY.CRITICAL 
-                    ? `${prefix} Critical Error in ${context}\n${errorMsg}\n\nScript may not function properly.`
-                    : `${prefix} ${context}\n${errorMsg}`;
+            if (severity === this.SEVERITY.CRITICAL) {
+                const userMessage = `${prefix} Critical Error in ${context}\n${errorMsg}\n\nScript may not function properly.`;
                 alert(userMessage);
             }
 
@@ -139,7 +136,7 @@
          * @param {number} ms - Milliseconds to wait
          * @returns {Promise<void>}
          */
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));        
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         const initializeSDK = async () => {
             try {
@@ -178,7 +175,7 @@
                 await LevelReset_init();
 
             } catch (error) {
-                ErrorHandler.handle(error, 'SDK Initialization', ErrorHandler.SEVERITY.CRITICAL, true);
+                ErrorHandler.handle(error, 'SDK Initialization', ErrorHandler.SEVERITY.CRITICAL);
             }
         };
 
@@ -194,7 +191,7 @@
                     waitForSDK();
                 }
             } catch (err) {
-                ErrorHandler.handle(err, 'SDK Promise', ErrorHandler.SEVERITY.CRITICAL, true);
+                ErrorHandler.handle(err, 'SDK Promise', ErrorHandler.SEVERITY.CRITICAL);
             }
         };
 
@@ -238,7 +235,7 @@
                 document.head.appendChild(style);
             }
         } catch (error) {
-            ErrorHandler.handle(error, 'Main Initialization', ErrorHandler.SEVERITY.CRITICAL, true);
+            ErrorHandler.handle(error, 'Main Initialization', ErrorHandler.SEVERITY.CRITICAL);
             return;
         }
 
@@ -268,12 +265,8 @@
         };
 
         // Get road types dynamically from SDK instead of hardcoded mapping
-        // MAJOR CHANGE: Now using wmeSDK.DataModel.Segments.getRoadTypes() for dynamic road type mapping
-        // This replaces the previous hardcoded streets{} structure and makes the script more adaptable
-        // to locale changes and WME updates. SDK availability is mandatory - no fallbacks needed.
-        // Road types are loaded once during initialization and don't change during the session.
         let roadTypeConfig = {};
-        
+
         /**
          * Initialize road types from SDK
          * @returns {Object} Road types object with structure: {id: {typeName, scan, sdkType}}
@@ -282,40 +275,46 @@
             return ErrorHandler.wrapSync(() => {
                 const roadTypes = wmeSDK.DataModel.Segments.getRoadTypes();
                 const streetTypesMap = {};
-                
+
                 // Add all road types from SDK
                 roadTypes.forEach(roadType => {
                     streetTypesMap[roadType.id] = {
-                        typeName: roadType.name,
+                        typeName: roadType.localizedName,
                         scan: true,
-                        sdkType: roadType.id  // Use the actual SDK road type ID
+                        sdkType: roadType.name
                     };
                 });
-                
+
                 // Add special type for POIs (not in SDK road types)
                 streetTypesMap[90000] = {
                     typeName: "POI",
                     scan: true,
-                    sdkType: null // POIs are handled separately
+                    sdkType: "POI"
                 };
-                
+
                 console.log('LevelReset: Initialized', Object.keys(streetTypesMap).length, 'road types from SDK');
                 return streetTypesMap;
             }, 'Road Types Initialization', ErrorHandler.SEVERITY.CRITICAL)(); // Critical error if this fails
         }
-        
+
+        /**
+         * Get typeName by sdkType from roadTypeConfig
+         * @param {string} sdkType - The SDK type to look up
+         * @returns {string} The typeName if found, empty string otherwise
+         */
+        function getTypeNameBySdkType(sdkType) {
+            return ErrorHandler.wrapSync(() => {
+                const roadType = Object.values(roadTypeConfig).find(rt => rt.sdkType === sdkType);
+                return roadType ? roadType.typeName : "";
+            }, 'Type Name Lookup', ErrorHandler.SEVERITY.WARNING)();
+        }
+
         let relockObject = {};
 
         const requestsTimeout = 20000; // in ms
-        const rulesHash = "AKfycbw7Bb9MyAlRlEM3pUjF3zK3OhgSQA12qI2BJDmOvNM2BnhZc4clAfF-bsASSm1DGmr4eA";
+        const rulesHash = "AKfycbyBy5e4J1u3RbRK4cNWbUJ-sDL2aLDUIMH1glbf6xOEEMO0Z4wl2wTKIRw0HP5KDbwR6A";
         let rulesDB = {};
 
-        /**
-         * SCANNING FUNCTION:
-         * - scanArea(false): Lightweight function for UI counter updates on frequent events (map movements)
-         * - scanArea(true): Comprehensive scan that populates relockObject for actual relock operations
-         */
-        
         function onScreen(obj) {
             if (!obj || !obj.geometry) return false;
 
@@ -353,14 +352,14 @@
                     });
                 }
                 return true; // Default to visible if we can't determine
-            }, 'Viewport Visibility Check', ErrorHandler.SEVERITY.WARNING, true)();
+            }, 'Viewport Visibility Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
         function hasPendingUR(venueId) {
             return ErrorHandler.wrapSync(() => {
                 const requests = wmeSDK.DataModel.MapUpdateRequests.getAll();
                 return requests.some(req => req.venueId === venueId);
-            }, 'Update Request Check', ErrorHandler.SEVERITY.WARNING, false)();
+            }, 'Update Request Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
         function isVenueEditable(venue) {
@@ -369,10 +368,10 @@
             return ErrorHandler.wrapSync(() => {
                 // Check if venue is not ad-locked and user has edit permissions
                 return !venue.isAdLocked && wmeSDK.DataModel.Venues.hasPermissions({
-                    permission: "EDIT_GEOMETRY", 
+                    permission: "EDIT_GEOMETRY",
                     venueId: venue.id
                 });
-            }, 'Venue Editability Check', ErrorHandler.SEVERITY.WARNING, false)();
+            }, 'Venue Editability Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
         /**
@@ -387,9 +386,9 @@
             try {
                 // Verify permissions first
                 if (!wmeSDK.DataModel.Segments.hasPermissions({
-                        permission: "EDIT_PROPERTIES", 
-                        segmentId: segment.id
-                    })) {
+                    permission: "EDIT_PROPERTIES",
+                    segmentId: segment.id
+                })) {
                     ErrorHandler.handle(`No permission to edit segment: ${segment.id}`, 'Segment Permission Check', ErrorHandler.SEVERITY.WARNING);
                     return false;
                 }
@@ -419,7 +418,7 @@
             try {
                 // Verify permissions first
                 if (!wmeSDK.DataModel.Venues.hasPermissions({
-                    permission: "EDIT_GEOMETRY", 
+                    permission: "EDIT_GEOMETRY",
                     venueId: venue.id
                 })) {
                     ErrorHandler.handle(`No permission to edit venue: ${venue.id}`, 'Venue Permission Check', ErrorHandler.SEVERITY.WARNING);
@@ -451,13 +450,13 @@
                 // If respecting routing road type is enabled, check that first
                 if (localStorage.getItem(ID_KEYS.RESPECT_ROUTING) === 'true' && segment.routingRoadType) {
                     const routingType = roadTypeConfig[segment.routingRoadType];
-                    if (routingType) return routingType.typeName;
+                    if (routingType) return routingType.sdkType;
                 }
 
                 // Fall back to regular road type
                 const roadType = roadTypeConfig[segment.roadType];
-                return roadType ? roadType.typeName : null;
-            }, 'Road Type Determination', ErrorHandler.SEVERITY.WARNING, null)();
+                return roadType ? roadType.sdkType : null;
+            }, 'Road Type Determination', ErrorHandler.SEVERITY.WARNING)();
         }
 
         /**
@@ -475,7 +474,7 @@
                 const resetHigher = localStorage.getItem(ID_KEYS.ALL_SEGMENTS) === 'true';
                 // Reset if current lock is lower OR if resetHigher is enabled
                 return obj.lockRank < targetLock || (resetHigher && obj.lockRank > targetLock);
-            }, 'Lock Reset Condition Check', ErrorHandler.SEVERITY.WARNING, false)();
+            }, 'Lock Reset Condition Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
         function displayHtmlPage(res) {
@@ -513,12 +512,12 @@
                     },
                     ontimeout: function (res) {
                         const error = new Error('Request timeout');
-                        ErrorHandler.handle(error, 'HTTP Request', ErrorHandler.SEVERITY.ERROR, true);
+                        ErrorHandler.handle(error, 'HTTP Request', ErrorHandler.SEVERITY.CRITICAL);
                         reject(error);
                     },
                     onerror: function (res) {
                         const error = new Error('Request error');
-                        ErrorHandler.handle(error, 'HTTP Request', ErrorHandler.SEVERITY.ERROR, true);
+                        ErrorHandler.handle(error, 'HTTP Request', ErrorHandler.SEVERITY.CRITICAL);
                         reject(error);
                     }
                 });
@@ -540,7 +539,7 @@
                         break;
                     default:
                         displayError = false;
-                        ErrorHandler.handle(`Unsupported status code: ${res.status}`, 'HTTP Response Validation', ErrorHandler.SEVERITY.ERROR, true, {
+                        ErrorHandler.handle(`Unsupported status code: ${res.status}`, 'HTTP Response Validation', ErrorHandler.SEVERITY.CRITICAL, {
                             headers: res.responseHeaders,
                             response: res.responseText
                         });
@@ -548,11 +547,11 @@
                 }
             } else {
                 displayError = false;
-                ErrorHandler.handle('Response is empty', 'HTTP Response Validation', ErrorHandler.SEVERITY.ERROR, true);
+                ErrorHandler.handle('Response is empty', 'HTTP Response Validation', ErrorHandler.SEVERITY.CRITICAL);
             }
 
             if (displayError) {
-                ErrorHandler.handle('Error processing request', 'HTTP Response Validation', ErrorHandler.SEVERITY.ERROR, true, {
+                ErrorHandler.handle('Error processing request', 'HTTP Response Validation', ErrorHandler.SEVERITY.CRITICAL, {
                     response: res.responseText
                 });
             }
@@ -583,221 +582,232 @@
                 await initUI(data.rules);
 
             } catch (err) {
-                ErrorHandler.handle(err, 'Lock Rules Fetching', ErrorHandler.SEVERITY.ERROR, true);
+                ErrorHandler.handle(err, 'Lock Rules Fetching', ErrorHandler.SEVERITY.CRITICAL);
             }
         }
+
+        // Flag to track if a scan is in progress
+        let isScanInProgress = false;
 
         /**
          * Comprehensive scan function for relock preparation
          * @returns {Promise<void>}
          */
         const scanArea = ErrorHandler.wrapAsync(async () => {
-            // Get user info for relocking
-            const userInfo = wmeSDK.State.getUserInfo();
-            if (!userInfo) {
-                ErrorHandler.handle('Unable to get user info', 'User Info Retrieval', ErrorHandler.SEVERITY.CRITICAL, true);
-                return;
-            }
-            const userlevel = userInfo.rank + 1;
-
-            // UI elements needed for relocking mode
-            let respectRouting = document.getElementById('_respectRouting');
-            let relockSubTitle = document.getElementById('reshdr');
-            let relockAllbutton = document.getElementById('rlkall');
-
-            if (!(relockSubTitle && relockAllbutton && respectRouting)) {
+            // If a scan is already in progress, skip this one
+            if (isScanInProgress) {
+                console.debug('LevelReset: Scan already in progress, skipping...');
                 return;
             }
 
-            hideInactiveCities();
-
-            // Initialize relock object
-            Object.values(roadTypeConfig).forEach(function (street) {
-                if (street.typeName && defaultLocks[street.typeName] !== undefined) {
-                    relockObject[street.typeName] = [];
+            try {
+                isScanInProgress = true;
+                const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
+                if (!topCountry || !topCountry.abbr) {
+                    ErrorHandler.handle('Top country not found or invalid', 'Country Retrieval', ErrorHandler.SEVERITY.ERROR);
+                    return;
                 }
-            });
-            // Ensure POI is always included
-            if (!relockObject["POI"]) {
-                relockObject["POI"] = [];
-            }
+                const userInfo = wmeSDK.State.getUserInfo();
+                if (!userInfo) {
+                    ErrorHandler.handle('Unable to get user info', 'User Info Retrieval', ErrorHandler.SEVERITY.ERROR);
+                    return;
+                }
+                const userlevel = userInfo.rank + 1;
 
-            // Set up relocking parameters
-            var foundBadlocks = false;
-            var respectRoutingRoadType = respectRouting.checked;
-            var count = 0;
-            const limitCount = 150;
-            relockSubTitle.innerHTML = 'Results (limit: ' + limitCount + ')';
+                // UI elements needed for relocking mode
+                let respectRouting = document.getElementById(ID_KEYS.RESPECT_ROUTING);
+                let relockSubTitle = document.getElementById('reshdr');
+                let relockAllbutton = document.getElementById('rlkall');
 
-            // Choose country lock settings
-            let topCountry = wmeSDK.DataModel.Countries.getTopCountry();
-            let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : defaultLocks;
-            console.log("LevelReset: Rules to be used", ABBR);
+                if (!(relockSubTitle && relockAllbutton && respectRouting)) {
+                    return;
+                }
 
-            // Disable unchecked road types
-            $.each(roadTypeConfig, function (key, value) {
-                let idPrefix = ID_KEYS.ELM_PREFIX + value.typeName + ID_KEYS.ELM_CHK;
-                let chk = document.getElementById(idPrefix);
-                value.scan = (chk && chk.checked);
-            });
+                hideInactiveCities();
 
-            // Get all data
-            const segments = wmeSDK.DataModel.Segments.getAll();
-            const venues = wmeSDK.DataModel.Venues.getAll();
+                // Initialize relock object
+                Object.values(roadTypeConfig).forEach(function (street) {
+                    if (street.sdkType && defaultLocks[street.sdkType] !== undefined) {
+                        relockObject[street.sdkType] = [];
+                    }
+                });
 
-            // Process segments
-            for (const segment of segments) {
-                if (!onScreen(segment)) continue;
-                if (count >= limitCount) break;
+                // Set up relocking parameters
+                var foundBadlocks = false;
+                var respectRoutingRoadType = respectRouting.checked;
+                var count = 0;
+                const limitCount = 150;
+                relockSubTitle.innerHTML = 'Results (limit: ' + limitCount + ')';
 
-                const roadType = getRoadType(segment);
-                if (!roadType) continue;
+                // Choose country lock settings
+                let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : defaultLocks;
+                console.log("LevelReset: Rules to be used", ABBR);
 
-                const streetType = Object.values(roadTypeConfig).find(s => s.typeName === roadType);
-                if (!streetType || !streetType.scan) continue;
+                // Disable unchecked road types
+                $.each(roadTypeConfig, function (key, value) {
+                    let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType + ID_KEYS.ELM_CHK;
+                    let chk = document.getElementById(idPrefix);
+                    value.scan = (chk && chk.checked);
+                });
 
-                // Full relocking logic
-                if (!segment || segment.type !== "segment") continue;
+                // Get all data
+                const segments = wmeSDK.DataModel.Segments.getAll();
+                const venues = wmeSDK.DataModel.Venues.getAll();
 
-                try {
-                    if (!wmeSDK.DataModel.Segments.hasPermissions({
-                        permission: "EDIT_PROPERTIES", 
-                        segmentId: segment.id
-                    })) {
+                // Process segments
+                for (const segment of segments) {
+                    if (!onScreen(segment)) continue;
+                    if (count >= limitCount) break;
+
+                    const roadType = getRoadType(segment);
+                    if (!roadType) continue;
+
+                    const streetType = Object.values(roadTypeConfig).find(s => s.sdkType === roadType);
+                    if (!streetType || !streetType.scan) continue;
+
+                    // Full relocking logic
+                    if (!segment || segment.type !== "segment") continue;
+
+                    try {
+                        if (!wmeSDK.DataModel.Segments.hasPermissions({
+                            permission: "EDIT_PROPERTIES",
+                            segmentId: segment.id
+                        })) {
                             continue;
                         }
 
-                    const effectiveRoadType = respectRoutingRoadType && segment.routingRoadType
-                        ? segment.routingRoadType
-                        : segment.roadType;
+                        const effectiveRoadType = respectRoutingRoadType && segment.routingRoadType
+                            ? segment.routingRoadType
+                            : segment.roadType;
 
-                    const curStreet = roadTypeConfig[effectiveRoadType];
-                    if (!curStreet || !curStreet.scan) continue;
+                        const curStreet = roadTypeConfig[effectiveRoadType];
+                        if (!curStreet || !curStreet.scan) continue;
 
-                    let cityID = null;
-                    try {
-                        if (segment.primaryStreetID) {
-                            const street = wmeSDK.DataModel.Streets.getById({ streetId: segment.primaryStreetID });
-                            cityID = street ? street.cityId : null;
+                        let cityID = null;
+                        try {
+                            if (segment.primaryStreetID) {
+                                const street = wmeSDK.DataModel.Streets.getById({ streetId: segment.primaryStreetID });
+                                cityID = street ? street.cityId : null;
+                            }
+                        } catch (err) {
+                            console.warn('LevelReset: Could not get street info for segment:', segment.id);
                         }
-                    } catch (err) {
-                        console.warn('LevelReset: Could not get street info for segment:', segment.id);
-                    }
 
-                    const cityRules = cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID];
-                    const stLocks = cityRules ? cityRules.Locks : ABBR;
-                    const desiredLockLevel = stLocks[curStreet.typeName] - 1;
+                        const cityRules = cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID];
+                        const stLocks = cityRules ? cityRules.Locks : ABBR;
+                        const desiredLockLevel = stLocks[curStreet.sdkType] - 1;
 
-                    // setLockLevel logic inline
-                    const includeAllSegments = document.getElementById('_allSegments');
-                    const allSegmentsInclude = includeAllSegments.checked && userlevel > 4;
-                    if (userlevel > desiredLockLevel) {
-                        if ((segment.lockRank < desiredLockLevel) ||
-                            (segment.lockRank > desiredLockLevel && allSegmentsInclude)) {
-                            relockObject[curStreet.typeName].push({
-                                object: segment,
-                                lockRank: desiredLockLevel
-                            });
-                            foundBadlocks = true;
-                            count++;
+                        // setLockLevel logic inline
+                        const includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
+                        const allSegmentsInclude = includeAllSegments.checked && userlevel > 4;
+                        if (userlevel > desiredLockLevel) {
+                            if ((segment.lockRank < desiredLockLevel) ||
+                                (segment.lockRank > desiredLockLevel && allSegmentsInclude)) {
+                                relockObject[curStreet.sdkType].push({
+                                    object: segment,
+                                    lockRank: desiredLockLevel
+                                });
+                                foundBadlocks = true;
+                                count++;
 
-                            // Update UI counter for this road type
-                            const countElement = document.getElementById(ID_KEYS.ELM_PREFIX + curStreet.typeName + ID_KEYS.ROAD_TYPE_VALUE);
-                            if (countElement) {
-                                const currentCount = parseInt(countElement.textContent) || 0;
-                                countElement.textContent = currentCount + 1;
+                                // Update UI counter for this road type
+                                const countElement = document.getElementById(ID_KEYS.ELM_PREFIX + curStreet.sdkType + ID_KEYS.ROAD_TYPE_VALUE);
+                                if (countElement) {
+                                    const currentCount = parseInt(countElement.textContent) || 0;
+                                    countElement.textContent = currentCount + 1;
+                                }
                             }
                         }
+                    } catch (segmentError) {
+                        console.error('LevelReset: Error processing segment:', segmentError);
+                        continue;
                     }
-                } catch (segmentError) {
-                    console.error('LevelReset: Error processing segment:', segmentError);
-                    continue;
                 }
-            }
 
-            // Process venues (POIs)
-            if (roadTypeConfig["90000"] && roadTypeConfig["90000"].scan) {
-                let scanObj = "POI";
-                venues.forEach(venue => {
-                    if (!onScreen(venue)) return;
-                    if (!isVenueEditable(venue)) return;
-                    if (hasPendingUR(venue.id)) return;
-                    if (count >= limitCount) return;
+                // Process venues (POIs)
+                if (roadTypeConfig["90000"] && roadTypeConfig["90000"].scan) {
+                    let scanObj = "POI";
+                    venues.forEach(venue => {
+                        if (!onScreen(venue)) return;
+                        if (!isVenueEditable(venue)) return;
+                        if (hasPendingUR(venue.id)) return;
+                        if (count >= limitCount) return;
 
-                    // Full relocking logic for POIs
-                    const address = wmeSDK.DataModel.Venues.getAddress(venue.id);
-                    const cityID = address && address.street ? address.street.cityId : null;
+                        // Full relocking logic for POIs
+                        const address = wmeSDK.DataModel.Venues.getAddress({ venueId: venue.id });
+                        const cityID = address && address.street ? address.street.cityId : null;
 
-                    let desiredLockLevel = (cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID]) 
-                        ? rulesDB[topCountry.abbr][cityID].Locks[scanObj] 
-                        : ABBR[scanObj];
-                    desiredLockLevel--;
+                        let desiredLockLevel = (cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID])
+                            ? rulesDB[topCountry.abbr][cityID].Locks[scanObj]
+                            : ABBR[scanObj];
+                        desiredLockLevel--;
 
-                    // setLockLevel logic for venues
-                    const includeAllSegments = document.getElementById('_allSegments');
-                    const allSegmentsInclude = includeAllSegments.checked && userlevel > 4;
-                    if (userlevel > desiredLockLevel) {
-                        if ((venue.lockRank < desiredLockLevel) ||
-                            (venue.lockRank > desiredLockLevel && allSegmentsInclude)) {
-                            relockObject[scanObj].push({
-                                object: venue,
-                                lockRank: desiredLockLevel
-                            });
-                            foundBadlocks = true;
-                            count++;
+                        // setLockLevel logic for venues
+                        const includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
+                        const allSegmentsInclude = includeAllSegments.checked && userlevel > 4;
+                        if (userlevel > desiredLockLevel) {
+                            if ((venue.lockRank < desiredLockLevel) ||
+                                (venue.lockRank > desiredLockLevel && allSegmentsInclude)) {
+                                relockObject[scanObj].push({
+                                    object: venue,
+                                    lockRank: desiredLockLevel
+                                });
+                                foundBadlocks = true;
+                                count++;
+                            }
                         }
-                    }
-                });
-            }
-
-            // Build results UI for relocking mode
-            $.each(relockObject, function (key, value) {
-                let __lckRight = document.createElement('div');
-                let __cntRight = document.createElement('div');
-                let idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
-
-                let __prntRight = document.getElementById(idPrefix);
-                __prntRight.innerHTML = '';
-
-                __cntRight.style.cssText = 'float:right';
-                __lckRight.style.cssText = 'width:15px;float:right;padding:2px 0 0 8px;cursor:pointer;';
-
-                if (value.length !== 0) {
-                    __cntRight.innerHTML = '<b>' + value.length + '</b>';
-                    __lckRight.className = 'fa fa-lock';
-                    __lckRight.style.cssText += 'color:red;';
-                    __lckRight.onclick = function () {
-                        relock(relockObject, key);
-                    };
-                    __prntRight.appendChild(__lckRight);
-                } else {
-                    __cntRight.innerHTML = '-';
+                    });
                 }
 
-                __prntRight.appendChild(__cntRight);
-            });
+                // Build results UI for relocking mode
+                $.each(relockObject, function (key, value) {
+                    let __lckRight = document.createElement('div');
+                    let __cntRight = document.createElement('div');
+                    let idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
 
-            // Update relock button state
-            if (foundBadlocks) {
-                relockAllbutton.removeAttribute('disabled');
-                $('#lockcolor').css('color', 'red');
-            } else {
-                relockAllbutton.setAttribute('disabled', true);
-                $('#lockcolor').css('color', 'green');
+                    let __prntRight = document.getElementById(idPrefix);
+                    __prntRight.innerHTML = '';
+
+                    __cntRight.style.cssText = 'float:right';
+                    __lckRight.style.cssText = 'width:15px;float:right;padding:2px 0 0 8px;cursor:pointer;';
+
+                    if (value.length !== 0) {
+                        __cntRight.innerHTML = '<b>' + value.length + '</b>';
+                        __lckRight.className = 'fa fa-lock';
+                        __lckRight.style.cssText += 'color:red;';
+                        __lckRight.onclick = function () {
+                            relock(relockObject, key);
+                        };
+                        __prntRight.appendChild(__lckRight);
+                    } else {
+                        __cntRight.innerHTML = '-';
+                    }
+
+                    __prntRight.appendChild(__cntRight);
+                });
+
+                // Update relock button state
+                if (foundBadlocks) {
+                    relockAllbutton.removeAttribute('disabled');
+                    $('#lockcolor').css('color', 'red');
+                } else {
+                    relockAllbutton.setAttribute('disabled', true);
+                    $('#lockcolor').css('color', 'green');
+                }
+            } finally {
+                // Always reset the scan flag when done
+                isScanInProgress = false;
             }
         }, 'Area Scanning', ErrorHandler.SEVERITY.WARNING);
 
         async function initUI(rules) {
             rulesDB = rules;
-            
+
             // Initialize road types from SDK now that it's ready
             roadTypeConfig = initializeRoadTypes();
 
             // Create sidebar tab (registerScriptTab returns a Promise)
-            const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab({
-                tabLabel: 'Re-lock Segments & POI',
-                tabPane: document.createElement('div')
-            });
+            const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab();
 
             let relockContent = document.createElement('div'),
                 relockTitle = document.createElement('wz-overline'),
@@ -817,17 +827,18 @@
                 includeAllSegmentsLabel = document.createElement('label'),
                 respectRouting = document.createElement('input'),
                 respectRoutingLabel = document.createElement('label'),
-                percentageLoader = document.createElement('div');
+                percentageLoader = document.createElement('div'),
+                relockTabLabel = document.createTextNode('Re-lock Segments & POI');
 
-            // Begin building
-            relockTitle.appendChild(document.createTextNode('Re-lock Segments & POI'));
+            tabLabel.innerHTML = "Re-🔒";
+            relockTitle.appendChild(relockTabLabel);
 
             // fill tab
             relockSub.innerHTML = 'Your on-screen area is automatically scanned when you load or pan around. Pressing the lock behind each type will relock only those results, or you can choose to relock all.<br/><br/>You can only relock segments lower or equal to your current editor level. Segments locked higher than normal are left alone.';
             relockSub.style.cssText = 'font-size:85%;padding:15px;border:1px solid red;border-radius:5px;position:relative';
             relockSub.id = 'sub';
             hidebutton.style.cssText = 'cursor:pointer;width:16px;height:16px;position:absolute;right:3px;top:3px;background-image:url(\'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAAAWdEVYdENyZWF0aW9uIFRpbWUAMTEvMjAvMTVnsXrkAAADTUlEQVQ4jW2TW0xbZQCAv3ODnpYWegEGo1wKwzBcxAs6dONSjGMm3kjmnBqjYqLREE2WLDFTIBmbmmxRpzHy4NPi4zRLfNBlZjjtnCEaOwYDJUDcVqC3UzpWTkt7fp80hvk9f/nePkkIwWb+gA5jMXLQjK50Zc2cuKVp4wlX2UevtAYubnal/waWoTI1N38keu7ck2uTl335ZFJCkpE8XlGob4ibgeZvMl7P8MtdO6/dFohDe/Sn0LdzJ457MuHfUYqLkYtsSIqMJASyIiNv30Gm6+G1zNbqvpf6gqF/AwaUXx+/MDdz6KArH4ujVVRAbgPVroMsQz6P6nJiGUnUGj/pR/tTyx2dtW+11t2UAa5Pz34w//GHLitpsG1wkODp0xQ11GOZJpgmzq5uqo8ew76zAxFPUDJxscwzFR4BkGfh/tj58/3Zq9OoFZU0PHsAd00NnWNj6IEApd3duA48g2nXKenpQSl1oceWsUeuPfdp+M9GZf/zA5+lz3x9lxRbAUli+dIlKnt7Ud1uCk1NJH0+VnMmq6EQfw0NUzCSULBQfT4HVf4iNRO50VlIGSi6jup0sj5zlTO7d9N48iRLa2vkCwWsyTArbx/GAaSBm/MLyLm85OjZs0c2zawQsoRmt5NeXCRyeRLh9rBkGBSEwF6i09h+L96GemyAx2bDK4ENkGRJkbM2fVy4PRhT08RmZvH09VE29C6ixEFuahL3hklLby9PhEKUt7VRZln4kHD669Bqtl6Q7W07jqWL9FQiEkHTdUoGBsgXF5EPh0m8M8Tc62/CSoLSqmqaR4ZxaRpenxfbgw8lCy2Nx5Uv3xuNXEll7shO/HI38Rjr09NImkriyCgOy0JZTZM4+x3C7SY+epTaLZWsdwXJPNV/6jF/9ReSEIKzmcKWpbHPF9OHDxUr6xksoAiQJAmnpuEWAqeq4G9uRr7nPpZeeDG10NqybV+5Ly4DPGJXlsv79u51v38iK22/EwmwACEEIpdD2tjApmncan8A49XX4qtNgeC+cl/8tpm+jxoBY+K3N7I/jj+dvxKuIhZV7KpKWV295dy1K6YEg1/NO2wj+/210f+98R9+hub0wo1BOZnslRVV16orf0hVeD55HH7d7P4N0V1gY9/zcaEAAAAASUVORK5CYII=\');';
-            hidebutton.onclick = function () {
+            hidebutton.onclick = () => {
                 localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
                 $('#sub').hide('slow');
             };
@@ -841,7 +852,7 @@
             relockAllbutton.type = 'button';
             relockAllbutton.value = 'Relock All';
             relockAllbutton.style.cssText = 'margin: 10px 3px 0 0';
-            relockAllbutton.onclick = function () {
+            relockAllbutton.onclick = () => {
                 relockAll();
             };
 
@@ -850,13 +861,13 @@
             includeAllSegments.name = "name";
             includeAllSegments.value = "value";
             includeAllSegments.checked = (localStorage.getItem(ID_KEYS.ALL_SEGMENTS) == 'true');
-            includeAllSegments.id = "_allSegments";
-            includeAllSegments.onclick = function () {
+            includeAllSegments.id = ID_KEYS.ALL_SEGMENTS;
+            includeAllSegments.onclick = () => {
                 localStorage.setItem(ID_KEYS.ALL_SEGMENTS, includeAllSegments.checked.toString());
                 scanArea(); // No parameters needed
                 relockShowAlert();
             };
-            includeAllSegmentsLabel.htmlFor = "_allSegments";
+            includeAllSegmentsLabel.htmlFor = ID_KEYS.ALL_SEGMENTS;
             includeAllSegmentsLabel.innerHTML = 'Also reset higher locked objects';
             includeAllSegmentsLabel.style.cssText = 'font-size:95%;margin-left:5px;vertical-align:middle';
 
@@ -865,12 +876,12 @@
             respectRouting.name = "name";
             respectRouting.value = "value";
             respectRouting.checked = (localStorage.getItem(ID_KEYS.RESPECT_ROUTING) == 'true');
-            respectRouting.id = "_respectRouting";
-            respectRouting.onclick = function () {
+            respectRouting.id = ID_KEYS.RESPECT_ROUTING;
+            respectRouting.onclick = () => {
                 localStorage.setItem(ID_KEYS.RESPECT_ROUTING, respectRouting.checked.toString());
                 scanArea(); // No parameters needed
             };
-            respectRoutingLabel.htmlFor = "_respectRouting";
+            respectRoutingLabel.htmlFor = ID_KEYS.RESPECT_ROUTING;
             respectRoutingLabel.innerHTML = 'Respect routing road type';
             respectRoutingLabel.style.cssText = 'font-size:95%;margin-left:5px;vertical-align:middle';
 
@@ -885,7 +896,7 @@
                     __cleardiv = document.createElement("div"),
                     __chkLeft = document.createElement('input'),
                     __lblLeft = document.createElement('label');
-                let idPrefix = ID_KEYS.ELM_PREFIX + value.typeName;
+                let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType;
 
                 // Begin building
                 __keyLeft.style.cssText = 'float:left';
@@ -934,8 +945,14 @@
 
             let bodyElm = document.createElement('tbody');
 
+            let countryRules = null;
             const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
-            const countryRules = rulesDB[topCountry.abbr];
+            if (topCountry && topCountry.abbr) {
+                countryRules = rulesDB[topCountry.abbr];
+            } else {
+                ErrorHandler.handle('Top country not found or invalid', 'Country Retrieval in initUI', ErrorHandler.SEVERITY.ERROR);
+            }
+            
             if (countryRules) {
                 $.each(countryRules, function (key, value) {
                     if (key == "CountryName") return false;
@@ -961,7 +978,7 @@
                             if (colIndex < maxCol) {
                                 colElm = document.createElement('td');
                                 colElm.className = "tg-type";
-                                colElm.innerHTML = k;
+                                colElm.innerHTML = getTypeNameBySdkType(k) || k;
                                 rowElm.appendChild(colElm);
 
                                 colElm = document.createElement('td');
@@ -1029,7 +1046,7 @@
                     });
                     eventHandlers.push(subscription);
                     return subscription;
-                }, `Event Handler Registration (${eventName})`, ErrorHandler.SEVERITY.ERROR, null)();
+                }, `Event Handler Registration (${eventName})`, ErrorHandler.SEVERITY.ERROR)();
             }
 
             // Create different handlers for different events
@@ -1088,7 +1105,6 @@
             // Register cleanup for both unload and disable scenarios
             if (typeof window.addEventListener === 'function') {
                 window.addEventListener('beforeunload', cleanupScript);
-                // Note: wme-disable event might not exist in SDK, removing that line
             }
 
             // Register for undo/redo operations
@@ -1192,7 +1208,7 @@
                     }
                 }
 
-                await scanArea(); // No parameters needed to refresh data
+                await scanArea();
 
                 $('#dotscntr').css('display', 'none');
                 $('#percentageLoader').hide();
@@ -1206,7 +1222,7 @@
         }
 
         function relockShowAlert() {
-            let includeAllSegments = document.getElementById('_allSegments');
+            let includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
             if (includeAllSegments && includeAllSegments.checked) {
                 $('#alertCntr').show("fast");
             } else {
