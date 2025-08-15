@@ -134,6 +134,13 @@
 
     // Initialize LevelReset and do some checks
     function LevelReset_bootstrap() {
+        /**
+         * Async delay utility function
+         * @param {number} ms - Milliseconds to wait
+         * @returns {Promise<void>}
+         */
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));        
+
         const initializeSDK = async () => {
             try {
                 wmeSDK = getWmeSdk({
@@ -172,14 +179,6 @@
 
             } catch (error) {
                 ErrorHandler.handle(error, 'SDK Initialization', ErrorHandler.SEVERITY.CRITICAL, true);
-                
-                // Display user-friendly error in WME if available
-                if (typeof WazeWrap !== 'undefined') {
-                    WazeWrap.Alerts.error(
-                        'WME LevelReset+ Error',
-                        'Failed to initialize: ' + error.message
-                    );
-                }
             }
         };
 
@@ -311,15 +310,6 @@
         const rulesHash = "AKfycbw7Bb9MyAlRlEM3pUjF3zK3OhgSQA12qI2BJDmOvNM2BnhZc4clAfF-bsASSm1DGmr4eA";
         let rulesDB = {};
 
-        // Helper functions using SDK methods
-        
-        /**
-         * Async delay utility function
-         * @param {number} ms - Milliseconds to wait
-         * @returns {Promise<void>}
-         */
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-        
         /**
          * SCANNING FUNCTION:
          * - scanArea(false): Lightweight function for UI counter updates on frequent events (map movements)
@@ -378,7 +368,10 @@
 
             return ErrorHandler.wrapSync(() => {
                 // Check if venue is not ad-locked and user has edit permissions
-                return !venue.isAdLocked && wmeSDK.DataModel.Venues.hasPermissions("EDIT_GEOMETRY", venue.id);
+                return !venue.isAdLocked && wmeSDK.DataModel.Venues.hasPermissions({
+                    permission: "EDIT_GEOMETRY", 
+                    venueId: venue.id
+                });
             }, 'Venue Editability Check', ErrorHandler.SEVERITY.WARNING, false)();
         }
 
@@ -393,7 +386,10 @@
 
             try {
                 // Verify permissions first
-                if (!wmeSDK.DataModel.Segments.hasPermissions("EDIT_GEOMETRY", segment.id)) {
+                if (!wmeSDK.DataModel.Segments.hasPermissions({
+                        permission: "EDIT_PROPERTIES", 
+                        segmentId: segment.id
+                    })) {
                     ErrorHandler.handle(`No permission to edit segment: ${segment.id}`, 'Segment Permission Check', ErrorHandler.SEVERITY.WARNING);
                     return false;
                 }
@@ -422,7 +418,10 @@
 
             try {
                 // Verify permissions first
-                if (!wmeSDK.DataModel.Venues.hasPermissions("EDIT_GEOMETRY", venue.id)) {
+                if (!wmeSDK.DataModel.Venues.hasPermissions({
+                    permission: "EDIT_GEOMETRY", 
+                    venueId: venue.id
+                })) {
                     ErrorHandler.handle(`No permission to edit venue: ${venue.id}`, 'Venue Permission Check', ErrorHandler.SEVERITY.WARNING);
                     return false;
                 }
@@ -633,7 +632,7 @@
             // Choose country lock settings
             let topCountry = wmeSDK.DataModel.Countries.getTopCountry();
             let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : defaultLocks;
-            console.log("LevelReset rules: ", ABBR);
+            console.log("LevelReset: Rules to be used", ABBR);
 
             // Disable unchecked road types
             $.each(roadTypeConfig, function (key, value) {
@@ -661,9 +660,12 @@
                 if (!segment || segment.type !== "segment") continue;
 
                 try {
-                    if (!wmeSDK.DataModel.Segments.hasPermissions("EDIT_GEOMETRY", segment.id)) {
-                        continue;
-                    }
+                    if (!wmeSDK.DataModel.Segments.hasPermissions({
+                        permission: "EDIT_PROPERTIES", 
+                        segmentId: segment.id
+                    })) {
+                            continue;
+                        }
 
                     const effectiveRoadType = respectRoutingRoadType && segment.routingRoadType
                         ? segment.routingRoadType
@@ -790,7 +792,6 @@
             
             // Initialize road types from SDK now that it's ready
             roadTypeConfig = initializeRoadTypes();
-            console.log('LevelReset: Road types initialized:', Object.keys(roadTypeConfig).length, 'types found');
 
             // Create sidebar tab (registerScriptTab returns a Promise)
             const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab({
@@ -1206,10 +1207,11 @@
 
         function relockShowAlert() {
             let includeAllSegments = document.getElementById('_allSegments');
-            if (includeAllSegments && includeAllSegments.checked)
+            if (includeAllSegments && includeAllSegments.checked) {
                 $('#alertCntr').show("fast");
-            else
+            } else {
                 $('#alertCntr').hide("fast");
+            }
         }
 
         function hideInactiveCities() {
