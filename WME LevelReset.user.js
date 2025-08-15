@@ -36,12 +36,15 @@
     };
 
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    
+    // Global SDK instance - initialized once and used by all functions
+    let wmeSDK;
 
     // Initialize LevelReset and do some checks
     function LevelReset_bootstrap() {
         const initializeSDK = async () => {
             try {
-                const wmeSDK = getWmeSdk({
+                wmeSDK = getWmeSdk({
                     scriptId: SCRIPT_ID,
                     scriptName: GM_info.script.name
                 });
@@ -108,11 +111,10 @@
 
     async function LevelReset_init() {
         try {
-            // Get SDK instance with proper error handling
-            const wmeSDK = getWmeSdk({
-                scriptId: SCRIPT_ID,
-                scriptName: GM_info.script.name
-            });
+            // SDK is already initialized globally, no need to get it again
+            if (!wmeSDK) {
+                throw new Error('SDK not initialized');
+            }
 
             // Add styles with error handling
             const lrStyle = [
@@ -1088,7 +1090,7 @@
                 const venues = wmeSDK.DataModel.Venues.getAll();
                 venues.forEach(venue => {
                     if (count < limitCount && onScreen(venue) && isVenueEditable(venue) && !hasPendingUR(venue)) {
-                        const address = wmdSDK.Venues.getAddress(venue.id);
+                        const address = wmeSDK.DataModel.Venues.getAddress(venue.id);
                         const cityID = address && address.street ? address.street.cityId : null;
 
                         let desiredLockLevel = (cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID]) ? rulesDB[topCountry.abbr][cityID].Locks[scanObj] : ABBR[scanObj];
