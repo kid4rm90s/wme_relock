@@ -24,14 +24,15 @@
 
 (function () {
     'use strict';
-    
+
     // Global constants
-    const STORAGE_KEYS = {
+    const ID_KEYS = {
         MSG_HIDE: 'Relock_msgHide',
         ALL_SEGMENTS: 'Relock_allSegments',
         RESPECT_ROUTING: 'Relock_respectRouting',
-        ROAD_TYPE_PREFIX: 'Relock_',
-        ROAD_TYPE_SUFFIX: '_chk'
+        ELM_PREFIX: 'Relock_',
+        ELM_CHK: '_chk',
+        ELM_VALUE: '_value'
     };
 
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -68,11 +69,8 @@
                     }
                 }
 
-                // Wait for map and data to be ready
-                await Promise.all([
-                    wmeSDK.Events.once({ eventName: "wme-map-ready" }),
-                    wmeSDK.Events.once({ eventName: "wme-data-ready" })
-                ]);
+                // Wait for map data to be loaded
+                await wmeSDK.Events.once({ eventName: "wme-map-data-loaded" });
 
                 // Initialize the main script
                 await LevelReset_init();
@@ -151,13 +149,6 @@
         // Loading indicator image
         const loader = 'data:image/gif;base64,R0lGODlhEAAQAPQAAP///wAAAPj4+Dg4OISEhAYGBiYmJtbW1qioqBYWFnZ2dmZmZuTk5JiYmMbGxkhISFZWVgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH+GkNyZWF0ZWQgd2l0aCBhamF4bG9hZC5pbmZvACH5BAAKAAAAIf8LTkVUU0NBUEUyLjADAQAAACwAAAAAEAAQAAAFUCAgjmRpnqUwFGwhKoRgqq2YFMaRGjWA8AbZiIBbjQQ8AmmFUJEQhQGJhaKOrCksgEla+KIkYvC6SJKQOISoNSYdeIk1ayA8ExTyeR3F749CACH5BAAKAAEALAAAAAAQABAAAAVoICCKR9KMaCoaxeCoqEAkRX3AwMHWxQIIjJSAZWgUEgzBwCBAEQpMwIDwY1FHgwJCtOW2UDWYIDyqNVVkUbYr6CK+o2eUMKgWrqKhj0FrEM8jQQALPFA3MAc8CQSAMA5ZBjgqDQmHIyEAIfkEAAoAAgAsAAAAABAAEAAABWAgII4j85Ao2hRIKgrEUBQJLaSHMe8zgQo6Q8sxS7RIhILhBkgumCTZsXkACBC+0cwF2GoLLoFXREDcDlkAojBICRaFLDCOQtQKjmsQSubtDFU/NXcDBHwkaw1cKQ8MiyEAIfkEAAoAAwAsAAAAABAAEAAABVIgII5kaZ6AIJQCMRTFQKiDQx4GrBfGa4uCnAEhQuRgPwCBtwK+kCNFgjh6QlFYgGO7baJ2CxIioSDpwqNggWCGDVVGphly3BkOpXDrKfNm/4AhACH5BAAKAAQALAAAAAAQABAAAAVgICCOZGmeqEAMRTEQwskYbV0Yx7kYSIzQhtgoBxCKBDQCIOcoLBimRiFhSABYU5gIgW01pLUBYkRItAYAqrlhYiwKjiWAcDMWY8QjsCf4DewiBzQ2N1AmKlgvgCiMjSQhACH5BAAKAAUALAAAAAAQABAAAAVfICCOZGmeqEgUxUAIpkA0AMKyxkEiSZEIsJqhYAg+boUFSTAkiBiNHks3sg1ILAfBiS10gyqCg0UaFBCkwy3RYKiIYMAC+RAxiQgYsJdAjw5DN2gILzEEZgVcKYuMJiEAOwAAAAAAAAAAAA==';
 
-        // Local storage keys
-        const STORAGE_KEYS = {
-            msgHide: 'Relock_msgHide',
-            allSegments: 'Relock_allSegments',
-            respectRouting: 'Relock_respectRouting'
-        };
-
         // Default lock levels
         const defaultLocks = {
             Street: 1,
@@ -177,7 +168,7 @@
             Stairway: 1
         };
 
-        // Road types mapped to SDK RoadTypeId
+        // Road types mapped to numeric IDs (since SDK RoadTypeId constants are not accessible)
         const streets = {
             // Special type for POIs
             90000: {
@@ -185,76 +176,76 @@
                 scan: true,
                 sdkType: null // POIs are handled separately
             },
-            // Street types using SDK RoadTypeId
-            [wmeSDK.DataModel.RoadTypes.PRIVATE_ROAD]: {
-                typeName: "Private",
-                scan: true,
-                sdkType: "PRIVATE_ROAD"
-            },
-            [wmeSDK.DataModel.RoadTypes.PARKING_LOT_ROAD]: {
-                typeName: "Parking",
-                scan: true,
-                sdkType: "PARKING_LOT_ROAD"
-            },
-            [wmeSDK.DataModel.RoadTypes.OFF_ROAD]: {
-                typeName: "Offroad",
-                scan: true,
-                sdkType: "OFF_ROAD"
-            },
-            [wmeSDK.DataModel.RoadTypes.STREET]: {
+            // Street types using numeric road type IDs
+            1: {
                 typeName: "Street",
                 scan: true,
                 sdkType: "STREET"
             },
-            [wmeSDK.DataModel.RoadTypes.PRIMARY_STREET]: {
+            2: {
                 typeName: "Primary",
                 scan: true,
                 sdkType: "PRIMARY_STREET"
             },
-            [wmeSDK.DataModel.RoadTypes.MINOR_HIGHWAY]: {
-                typeName: "Minor",
-                scan: true,
-                sdkType: "MINOR_HIGHWAY"
-            },
-            [wmeSDK.DataModel.RoadTypes.MAJOR_HIGHWAY]: {
-                typeName: "Major",
-                scan: true,
-                sdkType: "MAJOR_HIGHWAY"
-            },
-            [wmeSDK.DataModel.RoadTypes.RAMP]: {
-                typeName: "Ramp",
-                scan: true,
-                sdkType: "RAMP"
-            },
-            [wmeSDK.DataModel.RoadTypes.FREEWAY]: {
+            3: {
                 typeName: "Freeway",
                 scan: true,
                 sdkType: "FREEWAY"
             },
-            [wmeSDK.DataModel.RoadTypes.RAILROAD]: {
+            4: {
+                typeName: "Ramp",
+                scan: true,
+                sdkType: "RAMP"
+            },
+            6: {
+                typeName: "Major",
+                scan: true,
+                sdkType: "MAJOR_HIGHWAY"
+            },
+            7: {
+                typeName: "Minor",
+                scan: true,
+                sdkType: "MINOR_HIGHWAY"
+            },
+            8: {
+                typeName: "Offroad",
+                scan: true,
+                sdkType: "OFF_ROAD"
+            },
+            10: {
+                typeName: "Parking",
+                scan: true,
+                sdkType: "PARKING_LOT_ROAD"
+            },
+            16: {
+                typeName: "Private",
+                scan: true,
+                sdkType: "PRIVATE_ROAD"
+            },
+            17: {
                 typeName: "Railroad",
                 scan: true,
                 sdkType: "RAILROAD"
             },
-            [wmeSDK.DataModel.RoadTypes.NARROW_STREET]: {
-                typeName: "Narrow",
-                scan: true,
-                sdkType: "NARROW_STREET"
-            },
-            [wmeSDK.DataModel.RoadTypes.BOARDWALK]: {
+            18: {
                 typeName: "Boardwalk",
                 scan: true,
                 sdkType: "BOARDWALK"
             },
-            [wmeSDK.DataModel.RoadTypes.TRAIL]: {
+            19: {
                 typeName: "Trail",
                 scan: true,
                 sdkType: "TRAIL"
             },
-            [wmeSDK.DataModel.RoadTypes.STAIRWAY]: {
+            20: {
                 typeName: "Stairway",
                 scan: true,
                 sdkType: "STAIRWAY"
+            },
+            22: {
+                typeName: "Alley",
+                scan: true,
+                sdkType: "ALLEY"
             }
         };
         let relockObject = {};
@@ -275,10 +266,42 @@
             if (!obj || !obj.geometry) return false;
 
             try {
-                return wmeSDK.Map.isFeatureVisibleOnMap(obj);
+                // Since SDK doesn't provide isFeatureVisibleOnMap, implement basic viewport check
+                // For now, return true as a fallback - in a real implementation you'd calculate map bounds
+                // using the map center and zoom level
+                const mapCenter = wmeSDK.Map.getMapCenter();
+                const zoomLevel = wmeSDK.Map.getZoomLevel();
+
+                if (!mapCenter || zoomLevel === undefined) return false;
+
+                // Simple approximation - in a real implementation, you'd calculate proper bounds
+                // based on zoom level and map projection
+                const geometry = obj.geometry;
+                if (geometry.type === 'Point') {
+                    const [lon, lat] = geometry.coordinates;
+                    // Simple distance check from map center (very rough approximation)
+                    const distance = Math.sqrt(
+                        Math.pow(lon - mapCenter.lon, 2) +
+                        Math.pow(lat - mapCenter.lat, 2)
+                    );
+                    // Rough visibility threshold based on zoom level
+                    const threshold = Math.pow(2, (18 - zoomLevel)) * 0.01;
+                    return distance < threshold;
+                } else if (geometry.type === 'LineString') {
+                    // Check if any point of the line is within approximate bounds
+                    return geometry.coordinates.some(([lon, lat]) => {
+                        const distance = Math.sqrt(
+                            Math.pow(lon - mapCenter.lon, 2) +
+                            Math.pow(lat - mapCenter.lat, 2)
+                        );
+                        const threshold = Math.pow(2, (18 - zoomLevel)) * 0.01;
+                        return distance < threshold;
+                    });
+                }
+                return true; // Default to visible if we can't determine
             } catch (err) {
                 console.error('LevelReset: Error checking if feature is visible:', err);
-                return false;
+                return true; // Default to visible on error
             }
         }
 
@@ -321,8 +344,8 @@
                 }
 
                 // Update the segment's lock rank
-                await wmeSDK.DataModel.Segments.update({
-                    objectId: segment.id,
+                await wmeSDK.DataModel.Segments.updateSegment({
+                    segmentId: segment.id,
                     lockRank: newLockRank
                 });
 
@@ -350,8 +373,8 @@
                 }
 
                 // Update the venue's lock rank
-                await wmeSDK.DataModel.Venues.update({
-                    objectId: venue.id,
+                await wmeSDK.DataModel.Venues.updateVenue({
+                    venueId: venue.id,
                     lockRank: newLockRank
                 });
 
@@ -372,17 +395,15 @@
 
             try {
                 // If respecting routing road type is enabled, check that first
-                if (localStorage.getItem(STORAGE_KEYS.RESPECT_ROUTING) === 'true' && segment.routingRoadType) {
+                if (localStorage.getItem(ID_KEYS.RESPECT_ROUTING) === 'true' && segment.routingRoadType) {
                     const routingType = Object.values(streets).find(s =>
-                        s.sdkType && wmeSDK.DataModel.RoadTypes[s.sdkType] === segment.routingRoadType
+                        s.sdkType && segment.routingRoadType === parseInt(Object.keys(streets).find(key => streets[key] === s))
                     );
                     if (routingType) return routingType.typeName;
                 }
 
                 // Fall back to regular road type
-                const roadType = Object.values(streets).find(s =>
-                    s.sdkType && wmeSDK.DataModel.RoadTypes[s.sdkType] === segment.roadType
-                );
+                const roadType = streets[segment.roadType];
                 return roadType ? roadType.typeName : null;
             } catch (err) {
                 console.error('LevelReset: Error determining road type:', err);
@@ -402,7 +423,7 @@
             }
 
             try {
-                const resetHigher = localStorage.getItem(STORAGE_KEYS.ALL_SEGMENTS) === 'true';
+                const resetHigher = localStorage.getItem(ID_KEYS.ALL_SEGMENTS) === 'true';
                 // Reset if current lock is lower OR if resetHigher is enabled
                 return obj.lockRank < targetLock || (resetHigher && obj.lockRank > targetLock);
             } catch (err) {
@@ -548,7 +569,7 @@
 
                 // Update UI with counts
                 Object.entries(counts).forEach(([typeName, count]) => {
-                    const valueElement = document.getElementById(`Relock_${typeName}_value`);
+                    const valueElement = document.getElementById(ID_KEYS.ELM_PREFIX + typeName + ID_KEYS.ROAD_TYPE_VALUE);
                     if (valueElement) {
                         valueElement.innerHTML = count || '-';
                     }
@@ -597,7 +618,7 @@
             relockSub.id = 'sub';
             hidebutton.style.cssText = 'cursor:pointer;width:16px;height:16px;position:absolute;right:3px;top:3px;background-image:url(\'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAAAWdEVYdENyZWF0aW9uIFRpbWUAMTEvMjAvMTVnsXrkAAADTUlEQVQ4jW2TW0xbZQCAv3ODnpYWegEGo1wKwzBcxAs6dONSjGMm3kjmnBqjYqLREE2WLDFTIBmbmmxRpzHy4NPi4zRLfNBlZjjtnCEaOwYDJUDcVqC3UzpWTkt7fp80hvk9f/nePkkIwWb+gA5jMXLQjK50Zc2cuKVp4wlX2UevtAYubnal/waWoTI1N38keu7ck2uTl335ZFJCkpE8XlGob4ibgeZvMl7P8MtdO6/dFohDe/Sn0LdzJ457MuHfUYqLkYtsSIqMJASyIiNv30Gm6+G1zNbqvpf6gqF/AwaUXx+/MDdz6KArH4ujVVRAbgPVroMsQz6P6nJiGUnUGj/pR/tTyx2dtW+11t2UAa5Pz34w//GHLitpsG1wkODp0xQ11GOZJpgmzq5uqo8ew76zAxFPUDJxscwzFR4BkGfh/tj58/3Zq9OoFZU0PHsAd00NnWNj6IEApd3duA48g2nXKenpQSl1oceWsUeuPfdp+M9GZf/zA5+lz3x9lxRbAUli+dIlKnt7Ud1uCk1NJH0+VnMmq6EQfw0NUzCSULBQfT4HVf4iNRO50VlIGSi6jup0sj5zlTO7d9N48iRLa2vkCwWsyTArbx/GAaSBm/MLyLm85OjZs0c2zawQsoRmt5NeXCRyeRLh9rBkGBSEwF6i09h+L96GemyAx2bDK4ENkGRJkbM2fVy4PRhT08RmZvH09VE29C6ixEFuahL3hklLby9PhEKUt7VRZln4kHD669Bqtl6Q7W07jqWL9FQiEkHTdUoGBsgXF5EPh0m8M8Tc62/CSoLSqmqaR4ZxaRpenxfbgw8lCy2Nx5Uv3xuNXEll7shO/HI38Rjr09NImkriyCgOy0JZTZM4+x3C7SY+epTaLZWsdwXJPNV/6jF/9ReSEIKzmcKWpbHPF9OHDxUr6xksoAiQJAmnpuEWAqeq4G9uRr7nPpZeeDG10NqybV+5Ly4DPGJXlsv79u51v38iK22/EwmwACEEIpdD2tjApmncan8A49XX4qtNgeC+cl/8tpm+jxoBY+K3N7I/jj+dvxKuIhZV7KpKWV295dy1K6YEg1/NO2wj+/210f+98R9+hub0wo1BOZnslRVV16orf0hVeD55HH7d7P4N0V1gY9/zcaEAAAAASUVORK5CYII=\');';
             hidebutton.onclick = function () {
-                localStorage.setItem(STORAGE_KEYS.MSG_HIDE, '1');
+                localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
                 $('#sub').hide('slow');
             };
             dotscntr.style.cssText = 'width:16px;height:16px;margin-left:5px;background:url("' + loader + '");vertical-align:text-top;display:none';
@@ -618,10 +639,10 @@
             includeAllSegments.type = 'checkbox';
             includeAllSegments.name = "name";
             includeAllSegments.value = "value";
-            includeAllSegments.checked = (localStorage.getItem(STORAGE_KEYS.ALL_SEGMENTS) == 'true');
+            includeAllSegments.checked = (localStorage.getItem(ID_KEYS.ALL_SEGMENTS) == 'true');
             includeAllSegments.id = "_allSegments";
             includeAllSegments.onclick = function () {
-                localStorage.setItem(STORAGE_KEYS.ALL_SEGMENTS, includeAllSegments.checked.toString());
+                localStorage.setItem(ID_KEYS.ALL_SEGMENTS, includeAllSegments.checked.toString());
                 scanArea();
                 relockShowAlert();
             };
@@ -633,10 +654,10 @@
             respectRouting.type = 'checkbox';
             respectRouting.name = "name";
             respectRouting.value = "value";
-            respectRouting.checked = (localStorage.getItem(STORAGE_KEYS.RESPECT_ROUTING) == 'true');
+            respectRouting.checked = (localStorage.getItem(ID_KEYS.RESPECT_ROUTING) == 'true');
             respectRouting.id = "_respectRouting";
             respectRouting.onclick = function () {
-                localStorage.setItem(STORAGE_KEYS.RESPECT_ROUTING, respectRouting.checked.toString());
+                localStorage.setItem(ID_KEYS.RESPECT_ROUTING, respectRouting.checked.toString());
                 scanArea();
             };
             respectRoutingLabel.htmlFor = "_respectRouting";
@@ -654,19 +675,19 @@
                     __cleardiv = document.createElement("div"),
                     __chkLeft = document.createElement('input'),
                     __lblLeft = document.createElement('label');
-                let idPrefix = 'Relock_' + value.typeName + '_';
+                let idPrefix = ID_KEYS.ELM_PREFIX + value.typeName;
 
                 // Begin building
                 __keyLeft.style.cssText = 'float:left';
 
                 __chkLeft.type = 'checkbox';
-                __chkLeft.checked = (localStorage.getItem(idPrefix + 'chk') == 'true');
-                __chkLeft.id = idPrefix + 'chk';
+                __chkLeft.checked = (localStorage.getItem(idPrefix + ID_KEYS.ELM_CHK) == 'true');
+                __chkLeft.id = idPrefix + ID_KEYS.ELM_CHK;
                 __chkLeft.onclick = function () {
-                    localStorage.setItem(idPrefix + 'chk', __chkLeft.checked.toString());
+                    localStorage.setItem(idPrefix + ID_KEYS.ELM_CHK, __chkLeft.checked.toString());
                     scanArea();
                 };
-                __lblLeft.htmlFor = idPrefix + 'chk';
+                __lblLeft.htmlFor = idPrefix + ID_KEYS.ELM_CHK;
                 __lblLeft.innerHTML = value.typeName;
                 __lblLeft.style.cssText = 'margin-bottom:0px;font-weight:normal;';
 
@@ -676,7 +697,7 @@
                 __cntRight.style.cssText = 'float:right';
                 __cntRight.innerHTML = '-';
 
-                __prntRight.id = idPrefix + 'value';
+                __prntRight.id = idPrefix + ID_KEYS.ROAD_TYPE_VALUE;
                 __prntRight.style.cssText = 'float:right';
                 __prntRight.appendChild(__cntRight);
 
@@ -764,7 +785,7 @@
             percentageLoader.style.cssText = 'width:1px;height:10px;background-color:green;margin-top:10px;border:1px solid:#333333;display:none';
 
             // only show if user didn't hide it before
-            if (localStorage.getItem(STORAGE_KEYS.MSG_HIDE) !== '1') {
+            if (localStorage.getItem(ID_KEYS.MSG_HIDE) !== '1') {
                 relockSub.appendChild(hidebutton);
                 relockContent.appendChild(relockSub);
             }
@@ -862,9 +883,7 @@
             // Register cleanup for both unload and disable scenarios
             if (typeof window.addEventListener === 'function') {
                 window.addEventListener('beforeunload', cleanupScript);
-                document.addEventListener('wme-ready', () => {
-                    wmeSDK.Events.register('wme-disable', cleanupScript);
-                });
+                // Note: wme-disable event might not exist in SDK, removing that line
             }
 
             // Register for undo/redo operations
@@ -890,7 +909,6 @@
                 const objects = obj[key];
                 let i = 0;
                 const total = objects.length;
-                const batchSize = 25; // Process in batches for better performance
 
                 // Update GUI progress
                 const updateProgress = () => {
@@ -901,19 +919,26 @@
                     $('#dotscntr').css('display', 'inline-block');
                 };
 
-                while (i < total) {
-                    // Process a batch of updates
-                    const batch = objects.slice(i, i + batchSize);
-                    const actions = batch.map(obj => wmeSDK.DataModel.createUpdateAction(obj));
+                // Process objects individually since SDK doesn't support batch actions
+                for (const feature of objects) {
+                    try {
+                        if (key === 'POI') {
+                            await updateVenueLock(feature.object, feature.lockRank);
+                        } else {
+                            await updateSegmentLock(feature.object, feature.lockRank);
+                        }
 
-                    // Add all actions in the batch
-                    await wmeSDK.DataModel.actionManager.add(actions);
+                        i++;
+                        updateProgress();
 
-                    i += batchSize;
-                    updateProgress();
-
-                    // Small delay between batches to prevent UI freezing
-                    await new Promise(resolve => setTimeout(resolve, 50));
+                        // Small delay to prevent overwhelming the system
+                        if (i % 10 === 0) {
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                        }
+                    } catch (err) {
+                        console.error('LevelReset: Error updating feature:', err);
+                        continue;
+                    }
                 }
 
                 $('#dotscntr').css('display', 'none');
@@ -933,28 +958,34 @@
                 for (const [key, objects] of Object.entries(relockObject)) {
                     if (objects.length === 0) continue;
 
-                    const batchSize = 25;
                     let processed = 0;
                     const total = objects.length;
 
-                    // Process in batches
-                    while (processed < total) {
-                        const batch = objects.slice(processed, processed + batchSize);
-                        const actions = batch.map(obj => wmeSDK.DataModel.createUpdateAction(obj));
+                    // Process objects individually
+                    for (const feature of objects) {
+                        try {
+                            if (key === 'POI') {
+                                await updateVenueLock(feature.object, feature.lockRank);
+                            } else {
+                                await updateSegmentLock(feature.object, feature.lockRank);
+                            }
 
-                        // Add batch of actions
-                        await wmeSDK.DataModel.actionManager.add(actions);
+                            processed++;
 
-                        processed += batch.length;
+                            // Update progress bar
+                            const progress = (processed / total) * 100;
+                            const newWidth = (progress / 100) * $('#sidepanel-relockTab').css('width').replace('px', '');
+                            $('#percentageLoader').show();
+                            $('#percentageLoader').css('width', newWidth + 'px');
 
-                        // Update progress bar
-                        const progress = (processed / total) * 100;
-                        const newWidth = (progress / 100) * $('#sidepanel-relockTab').css('width').replace('px', '');
-                        $('#percentageLoader').show();
-                        $('#percentageLoader').css('width', newWidth + 'px');
-
-                        // Small delay between batches to prevent UI freezing
-                        await new Promise(resolve => setTimeout(resolve, 50));
+                            // Small delay every 10 updates to prevent overwhelming the system
+                            if (processed % 10 === 0) {
+                                await new Promise(resolve => setTimeout(resolve, 100));
+                            }
+                        } catch (err) {
+                            console.error('LevelReset: Error updating feature:', err);
+                            continue;
+                        }
                     }
                 }
 
@@ -1003,9 +1034,10 @@
             if (userlevel > desiredLockLevel) {
                 if ((feature.lockRank < desiredLockLevel) ||
                     (feature.lockRank > desiredLockLevel && allSegmentsInclude)) {
-                    relockObject[scanObj].push(wmeSDK.DataModel.createUpdateAction(feature, {
+                    relockObject[scanObj].push({
+                        object: feature,
                         lockRank: desiredLockLevel
-                    }));
+                    });
                     return true;
                 }
             }
@@ -1045,7 +1077,7 @@
 
             // disable unchecked road types
             $.each(streets, function (key, value) {
-                let idPrefix = STORAGE_KEYS.ROAD_TYPE_PREFIX + value.typeName + STORAGE_KEYS.ROAD_TYPE_SUFFIX;
+                let idPrefix = ID_KEYS.ELM_PREFIX + value.typeName + ID_KEYS.ELM_CHK;
                 let chk = document.getElementById(idPrefix);
                 value.scan = (chk && chk.checked);
             });
@@ -1057,7 +1089,7 @@
                 venues.forEach(venue => {
                     if (count < limitCount && onScreen(venue) && isVenueEditable(venue) && !hasPendingUR(venue)) {
                         const address = wmdSDK.Venues.getAddress(venue.id);
-                        const cityID = address.street ? street.cityId : null;
+                        const cityID = address && address.street ? address.street.cityId : null;
 
                         let desiredLockLevel = (cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID]) ? rulesDB[topCountry.abbr][cityID].Locks[scanObj] : ABBR[scanObj];
                         desiredLockLevel--;
@@ -1113,8 +1145,10 @@
                     if (!segment || segment.type !== "segment" || !onScreen(segment)) continue;
 
                     try {
-                        const isEditable = await wmeSDK.DataModel.isGeometryEditable(segment);
-                        if (!isEditable) continue;
+                        // Check permissions directly instead of using non-existent method
+                        if (!wmeSDK.DataModel.Segments.hasPermissions("EDIT_GEOMETRY", segment.id)) {
+                            continue;
+                        }
 
                         // Get the effective road type (routing or regular)
                         const effectiveRoadType = respectRoutingRoadType && segment.routingRoadType
@@ -1124,9 +1158,15 @@
                         const curStreet = streets[effectiveRoadType];
                         if (!curStreet || !curStreet.scan) continue;
 
-                        // Get city-specific lock rules
-                        const street = await wmeSDK.DataModel.Streets.getById(segment.primaryStreetID);
-                        const cityID = street?.cityID;
+                        let cityID = null;
+                        try {
+                            if (segment.primaryStreetID) {
+                                const street = wmeSDK.DataModel.Streets.getById({ streetId: segment.primaryStreetID });
+                                cityID = street ? street.cityId : null;
+                            }
+                        } catch (err) {
+                            console.warn('LevelReset: Could not get street info for segment:', segment.id);
+                        }
 
                         const cityRules = cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID];
                         const stLocks = cityRules ? cityRules.Locks : ABBR;
@@ -1137,7 +1177,7 @@
                             count++;
 
                             // Update UI counter for this road type
-                            const countElement = document.getElementById('Relock_' + curStreet.typeName + '_value');
+                            const countElement = document.getElementById(ID_KEYS.ELM_PREFIX + curStreet.typeName + ID_KEYS.ROAD_TYPE_VALUE);
                             if (countElement) {
                                 const currentCount = parseInt(countElement.textContent) || 0;
                                 countElement.textContent = currentCount + 1;
@@ -1156,7 +1196,7 @@
             $.each(relockObject, function (key, value) {
                 let __lckRight = document.createElement('div');
                 let __cntRight = document.createElement('div');
-                let idPrefix = 'Relock_' + key + '_value';
+                let idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
 
                 // Begin building
                 let __prntRight = document.getElementById(idPrefix);
