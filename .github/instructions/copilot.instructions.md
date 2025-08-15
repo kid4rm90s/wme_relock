@@ -17,7 +17,7 @@ WME LevelReset+ is a Tampermonkey userscript that automatically corrects lock le
 1. **Bootstrap & Initialization** (`LevelReset_bootstrap()`, `LevelReset_init()`):
    - Waits for `unsafeWindow.SDK_INITIALIZED` promise
    - Validates required SDK components: DataModel, Events, State, Editing, Map
-   - Waits for `wme-ready`, `wme-map-ready`, `wme-data-ready` events
+   - Waits for `wme-ready` and `wme-map-data-loaded` events before proceeding
 
 2. **External Rules System**:
    - `getAllLockRules()` - Fetches rules from Google Sheets via `GM_xmlhttpRequest`
@@ -28,37 +28,40 @@ WME LevelReset+ is a Tampermonkey userscript that automatically corrects lock le
 3. **Scanning Engine**:
    - `scanArea()` - Processes visible segments/venues using SDK DataModel
    - Uses `onScreen()` geometry checking for viewport filtering
-   - Populates `relockObject` with update actions for batch processing
+   - Populates `relockObject` with update actions for individual processing
 
 4. **Lock Level Logic**:
    - `setLockLevel()` - Core business logic comparing current vs desired lock levels
    - Respects user editor rank (`userlevel > desiredLockLevel`)
-   - Creates SDK update actions: `wmeSDK.DataModel.createUpdateAction(feature, { lockRank: desiredLockLevel })`
+   - Creates individual SDK update actions for each segment/venue
 
 ### Road Type Mapping
-Uses `streets` object mapping SDK RoadTypeId constants to internal type names:
+Uses `streets` object mapping numeric road type IDs to internal type names:
 ```js
 const streets = {
-  [wmeSDK.DataModel.RoadTypes.PRIVATE_ROAD]: { typeName: "Private", scan: true, sdkType: "PRIVATE_ROAD" },
+  1: { typeName: "Street", scan: true, sdkType: "STREET" },
+  3: { typeName: "Freeway", scan: true, sdkType: "FREEWAY" },
   90000: { typeName: "POI", scan: true, sdkType: null } // Special POI handling
 }
 ```
+Note: Numeric IDs are used because SDK RoadTypeId constants are not directly accessible in the userscript context.
 
 ## Critical SDK Usage Patterns
 
 ### Initialization Pattern
 ```js
+// Global SDK instance - initialized once and used by all functions
+let wmeSDK;
+
 // Always use this exact pattern for SDK initialization
-const wmeSDK = getWmeSdk({
+wmeSDK = getWmeSdk({
   scriptId: SCRIPT_ID, // Generated from GM_info.script.name
   scriptName: GM_info.script.name
 });
 
-// Wait for multiple events before proceeding
-await Promise.all([
-  wmeSDK.Events.once({ eventName: "wme-map-ready" }),
-  wmeSDK.Events.once({ eventName: "wme-data-ready" })
-]);
+// Wait for WME events before proceeding
+await wmeSDK.Events.once({ eventName: "wme-ready" });
+await wmeSDK.Events.once({ eventName: "wme-map-data-loaded" });
 ```
 
 ### Data Model Access
@@ -73,8 +76,8 @@ if (!wmeSDK.DataModel.Segments.hasPermissions("EDIT_GEOMETRY", segment.id)) {
 }
 
 // Update segment lock levels
-await wmeSDK.DataModel.Segments.update({
-  objectId: segment.id,
+await wmeSDK.DataModel.Segments.updateSegment({
+  segmentId: segment.id,
   lockRank: newLockRank
 });
 ```
@@ -88,24 +91,86 @@ const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab({
 });
 ```
 
+## Important Implementation Notes
+
+### SDK Limitations
+- SDK doesn't support batch operations - process features individually
+- Road type constants are not directly accessible in userscript context, use numeric IDs
+- Event names must match exactly: `wme-ready`, `wme-map-data-loaded`
+- Permission checking is required before any geometry edits
+
+### Processing Flow
+1. Wait for SDK initialization and WME readiness
+2. Fetch external rules from Google Sheets (with fallback to defaults)
+3. Scan visible area for segments/venues needing lock updates  
+4. Process each feature individually with proper error handling
+5. Update UI to reflect changes
+
+### Global Variables
+- `wmeSDK`: Single global SDK instance used throughout script
+- `rulesDB`: External rules fetched from Google Sheets
+- `relockObject`: Collection of features to process (not batch processed)
+- `userlevel`: Current user's editor level + 1
+
 ## Development Conventions
 
 ### Storage Keys Pattern
-All localStorage keys use `Relock_` prefix defined in `STORAGE_KEYS` constant:
+All localStorage keys use `Relock_` prefix defined in `ID_KEYS` constant:
 ```js
-const STORAGE_KEYS = {
+const ID_KEYS = {
   MSG_HIDE: 'Relock_msgHide',
   ALL_SEGMENTS: 'Relock_allSegments',
-  ROAD_TYPE_PREFIX: 'Relock_', // Combined with road type names
-  ROAD_TYPE_SUFFIX: '_chk'
+  RESPECT_ROUTING: 'Relock_respectRouting',
+  ELM_PREFIX: 'Relock_',
+  ELM_CHK: '_chk',
+  ELM_VALUE: '_value'
 };
 ```
 
 ### Error Handling Strategy
-- Always wrap SDK calls in try/catch blocks
-- Use `console.error()` for logging with 'LevelReset:' prefix
-- Display user-facing errors via `alert()` for critical failures
-- Graceful fallbacks: external rules → defaultLocks, GM_addStyle → manual style injection
+**CRITICAL: All error handling must use the centralized ErrorHandler system**
+
+The script implements a centralized error handling system through the `ErrorHandler` object with the following patterns:
+
+1. **Error Severity Levels**:
+   - `CRITICAL`: Fatal errors that prevent script functionality (shows user alert)
+   - `ERROR`: Errors affecting functionality but allowing continuation 
+   - `WARNING`: Potential issues that don't break functionality
+   - `INFO`: Informational messages
+
+2. **Required Error Handling Patterns**:
+   ```js
+   // For synchronous functions
+   function myFunction() {
+     return ErrorHandler.wrapSync(() => {
+       // function logic here
+     }, 'Function Name', ErrorHandler.SEVERITY.ERROR, defaultReturnValue)();
+   }
+
+   // For async functions  
+   const myAsyncFunction = ErrorHandler.wrapAsync(async () => {
+     // async function logic here
+   }, 'Async Function Name', ErrorHandler.SEVERITY.ERROR);
+
+   // Manual error handling
+   ErrorHandler.handle(error, 'Context Description', ErrorHandler.SEVERITY.ERROR, showUserAlert, additionalInfo);
+   ```
+
+3. **Forbidden Patterns**:
+   - ❌ Direct `console.error()`, `console.warn()`, `console.log()` calls
+   - ❌ Direct `alert()` calls for errors
+   - ❌ Inconsistent error message formatting
+   - ❌ Try/catch without using ErrorHandler
+
+4. **SDK Error Handling**: 
+   - Always wrap SDK calls in ErrorHandler patterns
+   - Use appropriate severity levels (CRITICAL for initialization, ERROR for operations, WARNING for non-essential features)
+   - Provide meaningful context descriptions for debugging
+
+5. **User-Facing Errors**: 
+   - CRITICAL errors automatically show user alerts
+   - Other errors can show alerts via `showUser: true` parameter
+   - Use descriptive, user-friendly error messages
 
 ### Async/Promise Patterns
 - Functions dealing with SDK are `async`
@@ -132,12 +197,13 @@ const STORAGE_KEYS = {
 2. **Permission Checking**: Use `hasPermissions()` before attempting segment/venue updates
 3. **Viewport Filtering**: Use `onScreen()` function to limit processing to visible features
 4. **User Level Validation**: Check `userlevel > desiredLockLevel` before applying lock changes
-5. **Batch Processing**: Collect updates in `relockObject` arrays, then apply via SDK batch operations
+5. **Individual Processing**: Process updates individually since SDK doesn't support batch operations
 
 ## File Structure
-- `WME LevelReset.user.js` - Single-file userscript (1200+ lines)
+- `WME LevelReset.user.js` - Single-file userscript (1300+ lines)
 - `WME_SDK_DOCUMENTATION.md` - Local SDK reference documentation
 - `README.md` - Basic project description and differences from original
+- `.github/instructions/copilot.instructions.md` - Development guidelines and patterns
 
 When making changes, ensure all SDK interactions follow the documented patterns in `WME_SDK_DOCUMENTATION.md` and test with the specific Google Sheets rules integration.
 
