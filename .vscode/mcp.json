@@ -1,8 +1,16 @@
 {
-  "servers": {
-    "readWebsiteFast": {
-      "command": "npx",
-      "args": ["-y", "@just-every/mcp-read-website-fast"]
-    }
-  }
+	"servers": {
+		"mcp-web-snapshot": {
+			"type": "stdio",
+			"command": "uv",
+			"args": [
+				"--directory",
+				"C:\\Projects\\mcp-web-snapshot",
+				"run",
+				"python",
+				"src/server.py"
+			]
+		}
+	},
+	"inputs": []
 }
