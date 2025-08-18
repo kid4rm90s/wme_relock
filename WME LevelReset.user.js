@@ -590,8 +590,8 @@
         }
 
         function validateHTTPResponse(res) {
-            let result = false,
-                displayError = true;
+            let result = false;
+            let displayError = true;
             if (res) {
                 switch (res.status) {
                     case 200:
@@ -701,9 +701,9 @@
                 });
 
                 // Set up relocking parameters
-                var foundBadlocks = false;
-                var respectRoutingRoadType = respectRouting.checked;
-                var count = 0;
+                let foundBadlocks = false;
+                let respectRoutingRoadType = respectRouting.checked;
+                let count = 0;
 
                 // Choose country lock settings
                 let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : defaultLocks;
@@ -872,26 +872,27 @@
             // Create sidebar tab (registerScriptTab returns a Promise)
             const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab();
 
-            let relockContent = document.createElement('div'),
-                relockTitle = document.createElement('wz-overline'),
-                relockSubTitle = document.createElement('wz-label'),
-                rulesSubTitle = document.createElement('wz-label'),
-                relockAllbutton = document.createElement('input'),
-                relockSub = document.createElement('p'),
-                versionTitle = document.createElement('wz-label'),
-                resultsCntr = document.createElement('div'),
-                rulesCntr = document.createElement('div'),
-                alertCntr = document.createElement('div'),
-                hidebutton = document.createElement('div'),
-                dotscntr = document.createElement('div'),
-                inputDiv1 = document.createElement('div'),
-                inputDiv2 = document.createElement('div'),
-                includeAllSegments = document.createElement('input'),
-                includeAllSegmentsLabel = document.createElement('label'),
-                respectRouting = document.createElement('input'),
-                respectRoutingLabel = document.createElement('label'),
-                percentageLoader = document.createElement('div'),
-                relockTabLabel = document.createTextNode('Re-lock Segments & POI');
+            // Create UI elements
+            let relockContent = document.createElement('div');
+            let relockTitle = document.createElement('wz-overline');
+            let relockSubTitle = document.createElement('wz-label');
+            let rulesSubTitle = document.createElement('wz-label');
+            let relockAllbutton = document.createElement('input');
+            let relockSub = document.createElement('p');
+            let versionTitle = document.createElement('wz-label');
+            let resultsCntr = document.createElement('div');
+            let rulesCntr = document.createElement('div');
+            let alertCntr = document.createElement('div');
+            let hidebutton = document.createElement('div');
+            let dotscntr = document.createElement('div');
+            let inputDiv1 = document.createElement('div');
+            let inputDiv2 = document.createElement('div');
+            let includeAllSegments = document.createElement('input');
+            let includeAllSegmentsLabel = document.createElement('label');
+            let respectRouting = document.createElement('input');
+            let respectRoutingLabel = document.createElement('label');
+            let percentageLoader = document.createElement('div');
+            let relockTabLabel = document.createTextNode('Re-lock Segments & POI');
 
             // Create lock status indicator for tab label
             const lockStatusIcon = document.createElement('span');
@@ -962,13 +963,14 @@
 
             // add results empty list
             Object.entries(roadTypeConfig).forEach(([key, value]) => {
-                let __cntr = document.createElement('div'),
-                    __keyLeft = document.createElement('div'),
-                    __prntRight = document.createElement('div'),
-                    __cntRight = document.createElement('div'),
-                    __cleardiv = document.createElement("div"),
-                    __chkLeft = document.createElement('input'),
-                    __lblLeft = document.createElement('label');
+                // Create UI elements for road type
+                let __cntr = document.createElement('div');
+                let __keyLeft = document.createElement('div');
+                let __prntRight = document.createElement('div');
+                let __cntRight = document.createElement('div');
+                let __cleardiv = document.createElement("div");
+                let __chkLeft = document.createElement('input');
+                let __lblLeft = document.createElement('label');
                 let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType;
 
                 // Begin building
@@ -1197,7 +1199,8 @@
         }
 
         async function relock(obj, key) {
-            let dotscntrElement, percentageLoaderElement;
+            let dotscntrElement;
+            let percentageLoaderElement;
             
             try {
                 const objects = obj[key];
@@ -1270,7 +1273,8 @@
         }
 
         async function relockAll() {
-            let dotscntrElement, percentageLoaderElement;
+            let dotscntrElement;
+            let percentageLoaderElement;
             
             try {
                 dotscntrElement = document.getElementById('dotscntr');
