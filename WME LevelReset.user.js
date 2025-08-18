@@ -19,7 +19,6 @@
 
 /* jshint esversion: 11 */
 /* global $ */
-/* global require */
 /* global getWmeSdk */
 
 (function () {
@@ -37,6 +36,10 @@
     };
 
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    
+    // Scanning limits
+    const SCAN_LIMIT_COUNT = 150;
+    const POI_FAKE_ID = "90000";
 
     // Global SDK instance - initialized once and used by all functions
     let wmeSDK;
@@ -290,7 +293,7 @@
                 });
 
                 // Add special type for POIs (not in SDK road types)
-                streetTypesMap[90000] = {
+                streetTypesMap[POI_FAKE_ID] = {
                     typeName: "POI",
                     scan: true,
                     sdkType: "POI"
@@ -605,6 +608,11 @@
         // Flag to track if a scan is in progress
         let isScanInProgress = false;
 
+        // UI element references for reuse (avoid repeated DOM queries)
+        let cachedElements = {
+            relockAllbutton: null
+        };
+
         /**
          * Comprehensive scan function for relock preparation
          * @returns {Promise<void>}
@@ -632,10 +640,8 @@
 
                 // UI elements needed for relocking mode
                 let respectRouting = document.getElementById(ID_KEYS.RESPECT_ROUTING);
-                let relockSubTitle = document.getElementById('reshdr');
-                let relockAllbutton = document.getElementById('rlkall');
 
-                if (!(relockSubTitle && relockAllbutton && respectRouting)) {
+                if (!(cachedElements.relockAllbutton && respectRouting)) {
                     return;
                 }
 
@@ -652,8 +658,6 @@
                 var foundBadlocks = false;
                 var respectRoutingRoadType = respectRouting.checked;
                 var count = 0;
-                const limitCount = 150;
-                relockSubTitle.innerHTML = 'Results (limit: ' + limitCount + ')';
 
                 // Choose country lock settings
                 let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : defaultLocks;
@@ -674,7 +678,7 @@
                 for (const segment of segments) {
                     try {
                         if (!onScreen(segment)) continue;
-                        if (count >= limitCount) break;
+                        if (count >= SCAN_LIMIT_COUNT) break;
 
                         const roadType = getRoadType(segment);
                         if (!roadType) continue;
@@ -733,13 +737,13 @@
                 }
 
                 // Process venues (POIs)
-                if (roadTypeConfig["90000"] && roadTypeConfig["90000"].scan) {
+                if (roadTypeConfig[POI_FAKE_ID] && roadTypeConfig[POI_FAKE_ID].scan) {
                     let scanObj = "POI";
                     venues.forEach(venue => {
                         if (!onScreen(venue)) return;
                         if (!isVenueEditable(venue)) return;
                         if (hasPendingUR(venue.id)) return;
-                        if (count >= limitCount) return;
+                        if (count >= SCAN_LIMIT_COUNT) return;
 
                         // Full relocking logic for POIs
                         const address = wmeSDK.DataModel.Venues.getAddress({ venueId: venue.id });
@@ -788,7 +792,7 @@
                         };
                         __prntRight.appendChild(__lckRight);
                     } else {
-                        __cntRight.innerHTML = '-';
+                        __cntRight.textContent = '-';
                     }
 
                     __prntRight.appendChild(__cntRight);
@@ -796,10 +800,10 @@
 
                 // Update relock button state
                 if (foundBadlocks) {
-                    relockAllbutton.removeAttribute('disabled');
+                    cachedElements.relockAllbutton.removeAttribute('disabled');
                     $('#lockcolor').css('color', 'red');
                 } else {
-                    relockAllbutton.setAttribute('disabled', true);
+                    cachedElements.relockAllbutton.setAttribute('disabled', true);
                     $('#lockcolor').css('color', 'green');
                 }
             } finally {
@@ -852,7 +856,7 @@
             };
             dotscntr.style.cssText = 'width:16px;height:16px;margin-left:5px;background:url("' + loader + '");vertical-align:text-top;display:none';
             dotscntr.id = 'dotscntr';
-            relockSubTitle.innerHTML = 'Results';
+            relockSubTitle.innerHTML = 'Results (limited to ' + SCAN_LIMIT_COUNT + ' per pass)';
             relockSubTitle.id = 'reshdr';
             rulesSubTitle.innerHTML = 'Active rules';
             versionTitle.innerHTML = 'Version ' + VERSION;
@@ -863,6 +867,9 @@
             relockAllbutton.onclick = () => {
                 relockAll();
             };
+
+            // Store references to avoid repeated DOM queries
+            cachedElements.relockAllbutton = relockAllbutton;
 
             // Also reset higher locked segments?
             includeAllSegments.type = 'checkbox';
@@ -924,7 +931,7 @@
                 __keyLeft.appendChild(__lblLeft);
 
                 __cntRight.style.cssText = 'float:right';
-                __cntRight.innerHTML = '-';
+                __cntRight.textContent = '-';
 
                 __prntRight.id = idPrefix + ID_KEYS.ROAD_TYPE_VALUE;
                 __prntRight.style.cssText = 'float:right';
@@ -1137,10 +1144,14 @@
                 let i = 0;
                 const total = objects.length;
 
+                // Get container width once instead of parsing CSS repeatedly
+                const container = $('#sidepanel-relockTab');
+                const containerWidth = container.length ? container.width() : 300;
+
                 // Update GUI progress
                 const updateProgress = () => {
                     const progress = (i / total) * 100;
-                    const newWidth = (progress / 100) * $('#sidepanel-relockTab').css('width').replace('px', '');
+                    const newWidth = (progress / 100) * containerWidth;
                     $('#percentageLoader').show();
                     $('#percentageLoader').css('width', newWidth + 'px');
                     $('#dotscntr').css('display', 'inline-block');
@@ -1181,6 +1192,10 @@
             try {
                 $('#dotscntr').css('display', 'inline-block');
 
+                // Get container width once for all progress calculations
+                const container = $('#sidepanel-relockTab');
+                const containerWidth = container.length ? container.width() : 300;
+
                 // Process each type of feature (segments, POIs, etc.)
                 for (const [key, objects] of Object.entries(relockObject)) {
                     if (objects.length === 0) continue;
@@ -1201,7 +1216,7 @@
 
                             // Update progress bar
                             const progress = (processed / total) * 100;
-                            const newWidth = (progress / 100) * $('#sidepanel-relockTab').css('width').replace('px', '');
+                            const newWidth = (progress / 100) * containerWidth;
                             $('#percentageLoader').show();
                             $('#percentageLoader').css('width', newWidth + 'px');
 
