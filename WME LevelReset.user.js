@@ -139,6 +139,52 @@
     */
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+    /**
+     * Animate element visibility with smooth transitions
+     * Replaces jQuery's show/hide animations with native CSS transitions
+     * @param {HTMLElement|string} element - Element or element ID to animate
+     * @param {boolean} show - true to show, false to hide
+     * @param {string} speed - 'fast' (150ms), 'slow' (600ms), or 'normal' (300ms)
+     * @param {string} displayType - CSS display value when showing ('block', 'inline-block', 'table-row', etc.)
+     * @example
+     * animateElement('alertBox', true, 'fast');  // Show element quickly
+     * animateElement(myElement, false, 'slow');  // Hide element slowly
+     * animateElement(row, true, 'normal', 'table-row');  // Show table row
+     */
+    function animateElement(element, show, speed = 'normal', displayType = 'block') {
+        // Get element if string ID was passed
+        const el = typeof element === 'string' ? document.getElementById(element) : element;
+        if (!el) return;
+
+        // Set transition duration based on speed (matching jQuery speeds)
+        const durations = {
+            'fast': 150,
+            'normal': 300,
+            'slow': 600
+        };
+        const duration = durations[speed] || durations.normal;
+
+        // Apply transition CSS
+        el.style.transition = `opacity ${duration}ms ease-in-out`;
+
+        if (show) {
+            // Show element: set display first, then animate opacity
+            el.style.display = displayType;
+            el.style.opacity = '0';
+            // Small delay to ensure display is applied before opacity change
+            setTimeout(() => {
+                el.style.opacity = '1';
+            }, 10);
+        } else {
+            // Hide element: animate opacity first, then set display none
+            el.style.opacity = '0';
+            setTimeout(() => {
+                el.style.display = 'none';
+                el.style.opacity = '1'; // Reset for next time
+            }, duration);
+        }
+    }
+
     // Initialize LevelReset and do some checks
     function LevelReset_bootstrap() {
 
@@ -864,14 +910,7 @@
             hidebutton.style.cssText = 'cursor:pointer;width:16px;height:16px;position:absolute;right:3px;top:3px;background-image:url(\'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAAAWdEVYdENyZWF0aW9uIFRpbWUAMTEvMjAvMTVnsXrkAAADTUlEQVQ4jW2TW0xbZQCAv3ODnpYWegEGo1wKwzBcxAs6dONSjGMm3kjmnBqjYqLREE2WLDFTIBmbmmxRpzHy4NPi4zRLfNBlZjjtnCEaOwYDJUDcVqC3UzpWTkt7fp80hvk9f/nePkkIwWb+gA5jMXLQjK50Zc2cuKVp4wlX2UevtAYubnal/waWoTI1N38keu7ck2uTl335ZFJCkpE8XlGob4ibgeZvMl7P8MtdO6/dFohDe/Sn0LdzJ457MuHfUYqLkYtsSIqMJASyIiNv30Gm6+G1zNbqvpf6gqF/AwaUXx+/MDdz6KArH4ujVVRAbgPVroMsQz6P6nJiGUnUGj/pR/tTyx2dtW+11t2UAa5Pz34w//GHLitpsG1wkODp0xQ11GOZJpgmzq5uqo8ew76zAxFPUDJxscwzFR4BkGfh/tj58/3Zq9OoFZU0PHsAd00NnWNj6IEApd3duA48g2nXKenpQSl1oceWsUeuPfdp+M9GZf/zA5+lz3x9lxRbAUli+dIlKnt7Ud1uCk1NJH0+VnMmq6EQfw0NUzCSULBQfT4HVf4iNRO50VlIGSi6jup0sj5zlTO7d9N48iRLa2vkCwWsyTArbx/GAaSBm/MLyLm85OjZs0c2zawQsoRmt5NeXCRyeRLh9rBkGBSEwF6i09h+L96GemyAx2bDK4ENkGRJkbM2fVy4PRhT08RmZvH09VE29C6ixEFuahL3hklLby9PhEKUt7VRZln4kHD669Bqtl6Q7W07jqWL9FQiEkHTdUoGBsgXF5EPh0m8M8Tc62/CSoLSqmqaR4ZxaRpenxfbgw8lCy2Nx5Uv3xuNXEll7shO/HI38Rjr09NImkriyCgOy0JZTZM4+x3C7SY+epTaLZWsdwXJPNV/6jF/9ReSEIKzmcKWpbHPF9OHDxUr6xksoAiQJAmnpuEWAqeq4G9uRr7nPpZeeDG10NqybV+5Ly4DPGJXlsv79u51v38iK22/EwmwACEEIpdD2tjApmncan8A49XX4qtNgeC+cl/8tpm+jxoBY+K3N7I/jj+dvxKuIhZV7KpKWV295dy1K6YEg1/NO2wj+/210f+98R9+hub0wo1BOZnslRVV16orf0hVeD55HH7d7P4N0V1gY9/zcaEAAAAASUVORK5CYII=\');';
             hidebutton.onclick = () => {
                 localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
-                const subElement = document.getElementById('sub');
-                if (subElement) {
-                    subElement.style.transition = 'opacity 0.3s ease-out';
-                    subElement.style.opacity = '0';
-                    setTimeout(() => {
-                        subElement.style.display = 'none';
-                    }, 300);
-                }
+                animateElement('sub', false, 'slow');
             };
             dotscntr.style.cssText = 'width:16px;height:16px;margin-left:5px;background:url("' + loader + '");vertical-align:text-top;display:none';
             dotscntr.id = 'dotscntr';
@@ -1288,14 +1327,7 @@
                 percentageLoaderElement = document.getElementById('percentageLoader');
                 
                 if (dotscntrElement) {
-                    dotscntrElement.style.display = 'none';
-                    // Animate fade out
-                    dotscntrElement.style.transition = 'opacity 0.3s ease-out';
-                    dotscntrElement.style.opacity = '0';
-                    setTimeout(() => {
-                        dotscntrElement.style.display = 'none';
-                        dotscntrElement.style.opacity = '1'; // Reset for next time
-                    }, 300);
+                    animateElement(dotscntrElement, false, 'normal');
                 }
                 if (percentageLoaderElement) {
                     percentageLoaderElement.style.display = 'none';
@@ -1306,14 +1338,7 @@
                 percentageLoaderElement = document.getElementById('percentageLoader');
                 
                 if (dotscntrElement) {
-                    dotscntrElement.style.display = 'none';
-                    // Animate fade out even on error
-                    dotscntrElement.style.transition = 'opacity 0.3s ease-out';
-                    dotscntrElement.style.opacity = '0';
-                    setTimeout(() => {
-                        dotscntrElement.style.display = 'none';
-                        dotscntrElement.style.opacity = '1'; // Reset for next time
-                    }, 300);
+                    animateElement(dotscntrElement, false, 'normal');
                 }
                 if (percentageLoaderElement) {
                     percentageLoaderElement.style.display = 'none';
@@ -1323,21 +1348,11 @@
 
         function relockShowAlert() {
             let includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
-            const alertCntr = document.getElementById('alertCntr');
             
-            if (includeAllSegments && includeAllSegments.checked && alertCntr) {
-                alertCntr.style.transition = 'opacity 0.3s ease-in-out';
-                alertCntr.style.display = 'block';
-                alertCntr.style.opacity = '0';
-                setTimeout(() => {
-                    alertCntr.style.opacity = '1';
-                }, 10);
-            } else if (alertCntr) {
-                alertCntr.style.transition = 'opacity 0.3s ease-in-out';
-                alertCntr.style.opacity = '0';
-                setTimeout(() => {
-                    alertCntr.style.display = 'none';
-                }, 300);
+            if (includeAllSegments && includeAllSegments.checked) {
+                animateElement('alertCntr', true, 'fast');
+            } else {
+                animateElement('alertCntr', false, 'fast');
             }
         }
 
@@ -1354,18 +1369,9 @@
                 }
                 
                 if (isActive || row.dataset.name == 'country') {
-                    row.style.transition = 'opacity 0.3s ease-in-out';
-                    row.style.display = 'table-row';
-                    row.style.opacity = '0';
-                    setTimeout(() => {
-                        row.style.opacity = '1';
-                    }, 10);
+                    animateElement(row, true, 'fast', 'table-row');
                 } else {
-                    row.style.transition = 'opacity 0.3s ease-in-out';
-                    row.style.opacity = '0';
-                    setTimeout(() => {
-                        row.style.display = 'none';
-                    }, 300);
+                    animateElement(row, false, 'fast');
                 }
             });
         }
