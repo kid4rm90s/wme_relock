@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME LevelReset +
-// @version      2025.08.15.001
+// @version      2025.08.18.001
 // @description  Fork of the original script. The WME LevelReset tool, to make re-locking segments and POI to their appropriate lock level easy & quick. Supports major road types and custom locking rules for specific cities.
 // @author       Broos Gert '2015, madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -139,7 +139,6 @@
     // Initialize LevelReset and do some checks
     function LevelReset_bootstrap() {
 
-
         const initializeSDK = async () => {
             try {
                 wmeSDK = getWmeSdk({
@@ -249,21 +248,24 @@
 
         // Default lock levels
         const defaultLocks = {
-            Street: 1,
-            Primary: 1,
-            Minor: 2,
-            Major: 3,
-            Ramp: 4,
-            Freeway: 4,
+            STREET: 1,
+            PRIMARY_STREET: 1,
+            MINOR_HIGHWAY: 2,
+            MAJOR_HIGHWAY: 3,
+            RAMP: 4,
+            FREEWAY: 4,
             POI: 1,
-            Railroad: 1,
-            Private: 1,
-            Parking: 1,
-            Offroad: 1,
-            Narrow: 1,
-            Boardwalk: 1,
-            Trail: 1,
-            Stairway: 1
+            RAILROAD: 1,
+            PRIVATE_ROAD: 1,
+            PARKING_LOT_ROAD: 1,
+            OFF_ROAD: 1,
+            ALLEY: 1,
+            PEDESTRIAN_BOARDWALK: 1,
+            WALKING_TRAIL: 1,
+            STAIRWAY: 1,
+            WALKWAY: 1,
+            FERRY: 1,
+            RUNWAY_TAXIWAY: 1
         };
 
         // Get road types dynamically from SDK instead of hardcoded mapping
@@ -374,6 +376,18 @@
                     venueId: venue.id
                 });
             }, 'Venue Editability Check', ErrorHandler.SEVERITY.WARNING)();
+        }
+
+        function isSegmentEditable(segment) {
+            if (!segment || !segment.id) return false;
+
+            return ErrorHandler.wrapSync(() => {
+                // Check if segment has no closures and user has edit permissions
+                return !segment.hasClosures && wmeSDK.DataModel.Segments.hasPermissions({
+                    permission: "EDIT_PROPERTIES",
+                    segmentId: segment.id
+                });
+            }, 'Segment Editability Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
         /**
@@ -629,7 +643,7 @@
 
                 // Initialize relock object
                 Object.values(roadTypeConfig).forEach(function (street) {
-                    if (street.sdkType && defaultLocks[street.sdkType] !== undefined) {
+                    if (street.sdkType) {
                         relockObject[street.sdkType] = [];
                     }
                 });
@@ -658,25 +672,17 @@
 
                 // Process segments
                 for (const segment of segments) {
-                    if (!onScreen(segment)) continue;
-                    if (count >= limitCount) break;
-
-                    const roadType = getRoadType(segment);
-                    if (!roadType) continue;
-
-                    const streetType = Object.values(roadTypeConfig).find(s => s.sdkType === roadType);
-                    if (!streetType || !streetType.scan) continue;
-
-                    // Full relocking logic
-                    if (!segment || segment.type !== "segment") continue;
-
                     try {
-                        if (!wmeSDK.DataModel.Segments.hasPermissions({
-                            permission: "EDIT_PROPERTIES",
-                            segmentId: segment.id
-                        })) {
-                            continue;
-                        }
+                        if (!onScreen(segment)) continue;
+                        if (count >= limitCount) break;
+
+                        const roadType = getRoadType(segment);
+                        if (!roadType) continue;
+
+                        const streetType = Object.values(roadTypeConfig).find(s => s.sdkType === roadType);
+                        if (!streetType || !streetType.scan) continue;
+
+                        if (!isSegmentEditable(segment)) continue;
 
                         const effectiveRoadType = respectRoutingRoadType && segment.routingRoadType
                             ? segment.routingRoadType
@@ -687,8 +693,8 @@
 
                         let cityID = null;
                         try {
-                            if (segment.primaryStreetID) {
-                                const street = wmeSDK.DataModel.Streets.getById({ streetId: segment.primaryStreetID });
+                            if (segment.primaryStreetId) {
+                                const street = wmeSDK.DataModel.Streets.getById({ streetId: segment.primaryStreetId });
                                 cityID = street ? street.cityId : null;
                             }
                         } catch (err) {
