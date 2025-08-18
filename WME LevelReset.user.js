@@ -39,7 +39,8 @@
     
     // Scanning limits
     const SCAN_LIMIT_COUNT = 150;
-    const POI_FAKE_ID = "90000";
+    const POI_ID = "90000"; // Fake ID for POI to not conflict with real street IDs
+    const POI_NAME = "POI";
 
     // Global SDK instance - initialized once and used by all functions
     let wmeSDK;
@@ -293,10 +294,10 @@
                 });
 
                 // Add special type for POIs (not in SDK road types)
-                streetTypesMap[POI_FAKE_ID] = {
-                    typeName: "POI",
+                streetTypesMap[POI_ID] = {
+                    typeName: POI_NAME,
                     scan: true,
-                    sdkType: "POI"
+                    sdkType: POI_NAME
                 };
 
                 console.log('LevelReset: Initialized', Object.keys(streetTypesMap).length, 'road types from SDK');
@@ -737,8 +738,7 @@
                 }
 
                 // Process venues (POIs)
-                if (roadTypeConfig[POI_FAKE_ID] && roadTypeConfig[POI_FAKE_ID].scan) {
-                    let scanObj = "POI";
+                if (roadTypeConfig[POI_ID] && roadTypeConfig[POI_ID].scan) {
                     venues.forEach(venue => {
                         if (!onScreen(venue)) return;
                         if (!isVenueEditable(venue)) return;
@@ -750,8 +750,8 @@
                         const cityID = address && address.street ? address.street.cityId : null;
 
                         let desiredLockLevel = (cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID])
-                            ? rulesDB[topCountry.abbr][cityID].Locks[scanObj]
-                            : ABBR[scanObj];
+                            ? rulesDB[topCountry.abbr][cityID].Locks[POI_NAME]
+                            : ABBR[POI_NAME];
                         desiredLockLevel--;
 
                         // setLockLevel logic for venues
@@ -760,7 +760,7 @@
                         if (userlevel > desiredLockLevel) {
                             if ((venue.lockRank < desiredLockLevel) ||
                                 (venue.lockRank > desiredLockLevel && allSegmentsInclude)) {
-                                relockObject[scanObj].push({
+                                relockObject[POI_NAME].push({
                                     object: venue,
                                     lockRank: desiredLockLevel
                                 });
@@ -1160,7 +1160,7 @@
                 // Process objects individually since SDK doesn't support batch actions
                 for (const feature of objects) {
                     try {
-                        if (key === 'POI') {
+                        if (key === POI_NAME) {
                             await updateVenueLock(feature.object, feature.lockRank);
                         } else {
                             await updateSegmentLock(feature.object, feature.lockRank);
@@ -1206,7 +1206,7 @@
                     // Process objects individually
                     for (const feature of objects) {
                         try {
-                            if (key === 'POI') {
+                            if (key === POI_NAME) {
                                 await updateVenueLock(feature.object, feature.lockRank);
                             } else {
                                 await updateSegmentLock(feature.object, feature.lockRank);
