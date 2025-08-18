@@ -18,7 +18,6 @@
 // ==/UserScript==
 
 /* jshint esversion: 11 */
-/* global $ */
 /* global getWmeSdk */
 
 (function () {
@@ -665,7 +664,7 @@
                 console.debug("LevelReset: Rules to be used", ABBR);
 
                 // Disable unchecked road types
-                $.each(roadTypeConfig, function (key, value) {
+                Object.entries(roadTypeConfig).forEach(([key, value]) => {
                     let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType + ID_KEYS.ELM_CHK;
                     let chk = document.getElementById(idPrefix);
                     value.scan = (chk && chk.checked);
@@ -772,7 +771,7 @@
                 }
 
                 // Build results UI for relocking mode
-                $.each(relockObject, function (key, value) {
+                Object.entries(relockObject).forEach(([key, value]) => {
                     let __lckRight = document.createElement('div');
                     let __cntRight = document.createElement('div');
                     let idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
@@ -801,10 +800,16 @@
                 // Update relock button state
                 if (foundBadlocks) {
                     cachedElements.relockAllbutton.removeAttribute('disabled');
-                    $('#lockcolor').css('color', 'red');
+                    const lockColorElement = document.getElementById('lockcolor');
+                    if (lockColorElement) {
+                        lockColorElement.style.color = 'red';
+                    }
                 } else {
                     cachedElements.relockAllbutton.setAttribute('disabled', true);
-                    $('#lockcolor').css('color', 'green');
+                    const lockColorElement = document.getElementById('lockcolor');
+                    if (lockColorElement) {
+                        lockColorElement.style.color = 'green';
+                    }
                 }
             } finally {
                 // Always reset the scan flag when done
@@ -842,7 +847,14 @@
                 percentageLoader = document.createElement('div'),
                 relockTabLabel = document.createTextNode('Re-lock Segments & POI');
 
-            tabLabel.innerHTML = "Re-🔒";
+            // Create lock status indicator for tab label
+            const lockStatusIcon = document.createElement('span');
+            lockStatusIcon.id = 'lockcolor';
+            lockStatusIcon.className = 'fa fa-lock';
+            lockStatusIcon.style.color = 'green'; // Default to green (no issues found)
+            
+            tabLabel.innerHTML = "Re-";
+            tabLabel.appendChild(lockStatusIcon);
             relockTitle.appendChild(relockTabLabel);
 
             // fill tab
@@ -852,7 +864,14 @@
             hidebutton.style.cssText = 'cursor:pointer;width:16px;height:16px;position:absolute;right:3px;top:3px;background-image:url(\'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAAAWdEVYdENyZWF0aW9uIFRpbWUAMTEvMjAvMTVnsXrkAAADTUlEQVQ4jW2TW0xbZQCAv3ODnpYWegEGo1wKwzBcxAs6dONSjGMm3kjmnBqjYqLREE2WLDFTIBmbmmxRpzHy4NPi4zRLfNBlZjjtnCEaOwYDJUDcVqC3UzpWTkt7fp80hvk9f/nePkkIwWb+gA5jMXLQjK50Zc2cuKVp4wlX2UevtAYubnal/waWoTI1N38keu7ck2uTl335ZFJCkpE8XlGob4ibgeZvMl7P8MtdO6/dFohDe/Sn0LdzJ457MuHfUYqLkYtsSIqMJASyIiNv30Gm6+G1zNbqvpf6gqF/AwaUXx+/MDdz6KArH4ujVVRAbgPVroMsQz6P6nJiGUnUGj/pR/tTyx2dtW+11t2UAa5Pz34w//GHLitpsG1wkODp0xQ11GOZJpgmzq5uqo8ew76zAxFPUDJxscwzFR4BkGfh/tj58/3Zq9OoFZU0PHsAd00NnWNj6IEApd3duA48g2nXKenpQSl1oceWsUeuPfdp+M9GZf/zA5+lz3x9lxRbAUli+dIlKnt7Ud1uCk1NJH0+VnMmq6EQfw0NUzCSULBQfT4HVf4iNRO50VlIGSi6jup0sj5zlTO7d9N48iRLa2vkCwWsyTArbx/GAaSBm/MLyLm85OjZs0c2zawQsoRmt5NeXCRyeRLh9rBkGBSEwF6i09h+L96GemyAx2bDK4ENkGRJkbM2fVy4PRhT08RmZvH09VE29C6ixEFuahL3hklLby9PhEKUt7VRZln4kHD669Bqtl6Q7W07jqWL9FQiEkHTdUoGBsgXF5EPh0m8M8Tc62/CSoLSqmqaR4ZxaRpenxfbgw8lCy2Nx5Uv3xuNXEll7shO/HI38Rjr09NImkriyCgOy0JZTZM4+x3C7SY+epTaLZWsdwXJPNV/6jF/9ReSEIKzmcKWpbHPF9OHDxUr6xksoAiQJAmnpuEWAqeq4G9uRr7nPpZeeDG10NqybV+5Ly4DPGJXlsv79u51v38iK22/EwmwACEEIpdD2tjApmncan8A49XX4qtNgeC+cl/8tpm+jxoBY+K3N7I/jj+dvxKuIhZV7KpKWV295dy1K6YEg1/NO2wj+/210f+98R9+hub0wo1BOZnslRVV16orf0hVeD55HH7d7P4N0V1gY9/zcaEAAAAASUVORK5CYII=\');';
             hidebutton.onclick = () => {
                 localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
-                $('#sub').hide('slow');
+                const subElement = document.getElementById('sub');
+                if (subElement) {
+                    subElement.style.transition = 'opacity 0.3s ease-out';
+                    subElement.style.opacity = '0';
+                    setTimeout(() => {
+                        subElement.style.display = 'none';
+                    }, 300);
+                }
             };
             dotscntr.style.cssText = 'width:16px;height:16px;margin-left:5px;background:url("' + loader + '");vertical-align:text-top;display:none';
             dotscntr.id = 'dotscntr';
@@ -903,7 +922,7 @@
             resultsCntr.style.cssText = 'margin-right:5px;';
 
             // add results empty list
-            $.each(roadTypeConfig, function (key, value) {
+            Object.entries(roadTypeConfig).forEach(([key, value]) => {
                 let __cntr = document.createElement('div'),
                     __keyLeft = document.createElement('div'),
                     __prntRight = document.createElement('div'),
@@ -969,8 +988,8 @@
             }
 
             if (countryRules) {
-                $.each(countryRules, function (key, value) {
-                    if (key == "CountryName") return false;
+                Object.entries(countryRules).forEach(([key, value]) => {
+                    if (key == "CountryName") return;
 
                     rowElm = document.createElement('tr');
                     rowElm.className = "tg-row";
@@ -986,7 +1005,7 @@
                     const maxCol = 3;
                     let colIndex = 0;
                     rowElm = document.createElement('tr');
-                    $.each(value.Locks, function (k, v) {
+                    Object.entries(value.Locks).forEach(([k, v]) => {
                         if (v) {
                             rowElm.className = "tg-row";
                             rowElm.dataset.name = parseInt(key) === 0 ? 'country' : value.CityName; // need to hard code 'country' to identify later
@@ -1139,22 +1158,31 @@
         }
 
         async function relock(obj, key) {
+            let dotscntrElement, percentageLoaderElement;
+            
             try {
                 const objects = obj[key];
                 let i = 0;
                 const total = objects.length;
 
                 // Get container width once instead of parsing CSS repeatedly
-                const container = $('#sidepanel-relockTab');
-                const containerWidth = container.length ? container.width() : 300;
+                const container = document.getElementById('sidepanel-relockTab');
+                const containerWidth = container ? container.offsetWidth : 300;
 
                 // Update GUI progress
                 const updateProgress = () => {
                     const progress = (i / total) * 100;
                     const newWidth = (progress / 100) * containerWidth;
-                    $('#percentageLoader').show();
-                    $('#percentageLoader').css('width', newWidth + 'px');
-                    $('#dotscntr').css('display', 'inline-block');
+                    percentageLoaderElement = document.getElementById('percentageLoader');
+                    dotscntrElement = document.getElementById('dotscntr');
+                    
+                    if (percentageLoaderElement) {
+                        percentageLoaderElement.style.display = 'block';
+                        percentageLoaderElement.style.width = newWidth + 'px';
+                    }
+                    if (dotscntrElement) {
+                        dotscntrElement.style.display = 'inline-block';
+                    }
                 };
 
                 // Process objects individually since SDK doesn't support batch actions
@@ -1179,22 +1207,41 @@
                     }
                 }
 
-                $('#dotscntr').css('display', 'none');
-                $('#percentageLoader').hide();
+                dotscntrElement = document.getElementById('dotscntr');
+                percentageLoaderElement = document.getElementById('percentageLoader');
+                
+                if (dotscntrElement) {
+                    dotscntrElement.style.display = 'none';
+                }
+                if (percentageLoaderElement) {
+                    percentageLoaderElement.style.display = 'none';
+                }
             } catch (error) {
                 console.error('LevelReset: Error in relock operation:', error);
-                $('#dotscntr').css('display', 'none');
-                $('#percentageLoader').hide();
+                dotscntrElement = document.getElementById('dotscntr');
+                percentageLoaderElement = document.getElementById('percentageLoader');
+                
+                if (dotscntrElement) {
+                    dotscntrElement.style.display = 'none';
+                }
+                if (percentageLoaderElement) {
+                    percentageLoaderElement.style.display = 'none';
+                }
             }
         }
 
         async function relockAll() {
+            let dotscntrElement, percentageLoaderElement;
+            
             try {
-                $('#dotscntr').css('display', 'inline-block');
+                dotscntrElement = document.getElementById('dotscntr');
+                if (dotscntrElement) {
+                    dotscntrElement.style.display = 'inline-block';
+                }
 
                 // Get container width once for all progress calculations
-                const container = $('#sidepanel-relockTab');
-                const containerWidth = container.length ? container.width() : 300;
+                const container = document.getElementById('sidepanel-relockTab');
+                const containerWidth = container ? container.offsetWidth : 300;
 
                 // Process each type of feature (segments, POIs, etc.)
                 for (const [key, objects] of Object.entries(relockObject)) {
@@ -1217,8 +1264,12 @@
                             // Update progress bar
                             const progress = (processed / total) * 100;
                             const newWidth = (progress / 100) * containerWidth;
-                            $('#percentageLoader').show();
-                            $('#percentageLoader').css('width', newWidth + 'px');
+                            percentageLoaderElement = document.getElementById('percentageLoader');
+                            
+                            if (percentageLoaderElement) {
+                                percentageLoaderElement.style.display = 'block';
+                                percentageLoaderElement.style.width = newWidth + 'px';
+                            }
 
                             // Small delay every 10 updates to prevent overwhelming the system
                             if (processed % 10 === 0) {
@@ -1233,40 +1284,88 @@
 
                 await scanArea();
 
-                $('#dotscntr').css('display', 'none');
-                $('#percentageLoader').hide();
-                $('#dotscntr').hide('slow');
+                dotscntrElement = document.getElementById('dotscntr');
+                percentageLoaderElement = document.getElementById('percentageLoader');
+                
+                if (dotscntrElement) {
+                    dotscntrElement.style.display = 'none';
+                    // Animate fade out
+                    dotscntrElement.style.transition = 'opacity 0.3s ease-out';
+                    dotscntrElement.style.opacity = '0';
+                    setTimeout(() => {
+                        dotscntrElement.style.display = 'none';
+                        dotscntrElement.style.opacity = '1'; // Reset for next time
+                    }, 300);
+                }
+                if (percentageLoaderElement) {
+                    percentageLoaderElement.style.display = 'none';
+                }
             } catch (error) {
                 console.error('LevelReset: Error in relockAll operation:', error);
-                $('#dotscntr').css('display', 'none');
-                $('#percentageLoader').hide();
-                $('#dotscntr').hide('slow');
+                dotscntrElement = document.getElementById('dotscntr');
+                percentageLoaderElement = document.getElementById('percentageLoader');
+                
+                if (dotscntrElement) {
+                    dotscntrElement.style.display = 'none';
+                    // Animate fade out even on error
+                    dotscntrElement.style.transition = 'opacity 0.3s ease-out';
+                    dotscntrElement.style.opacity = '0';
+                    setTimeout(() => {
+                        dotscntrElement.style.display = 'none';
+                        dotscntrElement.style.opacity = '1'; // Reset for next time
+                    }, 300);
+                }
+                if (percentageLoaderElement) {
+                    percentageLoaderElement.style.display = 'none';
+                }
             }
         }
 
         function relockShowAlert() {
             let includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
-            if (includeAllSegments && includeAllSegments.checked) {
-                $('#alertCntr').show("fast");
-            } else {
-                $('#alertCntr').hide("fast");
+            const alertCntr = document.getElementById('alertCntr');
+            
+            if (includeAllSegments && includeAllSegments.checked && alertCntr) {
+                alertCntr.style.transition = 'opacity 0.3s ease-in-out';
+                alertCntr.style.display = 'block';
+                alertCntr.style.opacity = '0';
+                setTimeout(() => {
+                    alertCntr.style.opacity = '1';
+                }, 10);
+            } else if (alertCntr) {
+                alertCntr.style.transition = 'opacity 0.3s ease-in-out';
+                alertCntr.style.opacity = '0';
+                setTimeout(() => {
+                    alertCntr.style.display = 'none';
+                }, 300);
             }
         }
 
         function hideInactiveCities() {
-            $('tr.tg-row').each(function (i) {
+            const allRows = document.querySelectorAll('tr.tg-row');
+            allRows.forEach((row) => {
                 let isActive = false;
                 const cities = wmeSDK.DataModel.Cities.getAll();
                 for (let city of cities) {
-                    if (city.name === $(this).data("name")) {
+                    if (city.name === row.dataset.name) {
                         isActive = true;
                         break;
                     }
                 }
-                if (isActive || $(this).data("name") == 'country') {
-                    $(this).show("fast");
+                
+                if (isActive || row.dataset.name == 'country') {
+                    row.style.transition = 'opacity 0.3s ease-in-out';
+                    row.style.display = 'table-row';
+                    row.style.opacity = '0';
+                    setTimeout(() => {
+                        row.style.opacity = '1';
+                    }, 10);
                 } else {
-                    $(this).hide("fast");
+                    row.style.transition = 'opacity 0.3s ease-in-out';
+                    row.style.opacity = '0';
+                    setTimeout(() => {
+                        row.style.display = 'none';
+                    }, 300);
                 }
             });
         }
