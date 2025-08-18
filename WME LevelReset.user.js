@@ -195,20 +195,11 @@
                     scriptName: GM_info.script.name
                 });
 
-                // Wait for WME to be fully ready
-                await wmeSDK.Events.once({ eventName: "wme-ready" });
-
-                // Verify critical conditions
-                if (!wmeSDK.State.isLoggedIn()) {
-                    throw new Error('User not logged in');
-                }
-
                 // Verify required SDK components
                 const requiredComponents = [
                     'DataModel',
                     'Events',
                     'State',
-                    'Editing',
                     'Map'
                 ];
 
@@ -216,6 +207,14 @@
                     if (!wmeSDK[component]) {
                         throw new Error(`Required SDK component ${component} not available`);
                     }
+                }
+
+                // Wait for WME to be fully ready
+                await wmeSDK.Events.once({ eventName: "wme-ready" });
+
+                // Verify critical conditions
+                if (!wmeSDK.State.isLoggedIn()) {
+                    throw new Error('User not logged in');
                 }
 
                 // Wait for map data to be loaded
@@ -362,11 +361,10 @@
             }, 'Type Name Lookup', ErrorHandler.SEVERITY.WARNING)();
         }
 
-        let relockObject = {};
-
         const requestsTimeout = 20000; // in ms
         const rulesHash = "AKfycbyBy5e4J1u3RbRK4cNWbUJ-sDL2aLDUIMH1glbf6xOEEMO0Z4wl2wTKIRw0HP5KDbwR6A";
         let rulesDB = {};
+        let relockObject = {};
 
         function onScreen(obj) {
             if (!obj || !obj.geometry) return false;
@@ -1352,7 +1350,7 @@
 
         function relockShowAlert() {
             let includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
-            
+
             if (includeAllSegments && includeAllSegments.checked) {
                 animateElement('alertCntr', true, 'fast');
             } else {
@@ -1371,7 +1369,7 @@
                         break;
                     }
                 }
-                
+
                 if (isActive || row.dataset.name == 'country') {
                     animateElement(row, true, 'fast', 'table-row');
                 } else {
