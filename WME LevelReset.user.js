@@ -258,8 +258,7 @@
                 '.relock-flex-row .relock-flex-right { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }',
                 '.relock-flex-row .relock-flex-counter { font-size: 100%; font-weight: bold; }',
                 '.lr-label { font-size: 95%; margin-left: 5px; vertical-align: middle; }',
-                '.lr-button { margin: 10px 3px 0 0; }',
-                '.lr-container { margin-right: 5px; }',
+                '.lr-container { margin-right: 5px; margin-bottom: 5px; }',
                 '.lr-info-box { font-size: 85%; padding: 15px; border: 1px solid red; border-radius: 5px; position: relative; }',
                 '.lr-alert-box { border: 1px solid #EBCCD1; background-color: #F2DEDE; color: #AC4947; font-weight: bold; font-size: 90%; border-radius: 5px; padding: 10px; margin: 5px 5px; display: none; }',
                 '.lr-close-btn { cursor: pointer; width: 16px; height: 16px; position: absolute; right: 3px; top: 3px; }',
@@ -794,7 +793,7 @@
             let relockTitle = document.createElement('wz-overline');
             let relockSubTitle = document.createElement('wz-label');
             let rulesSubTitle = document.createElement('wz-label');
-            let relockAllbutton = document.createElement('input');
+            let relockAllbutton = document.createElement('wz-button');
             let relockSub = document.createElement('p');
             let versionTitle = document.createElement('wz-label');
             let resultsCntr = document.createElement('div');
@@ -831,15 +830,16 @@
             relockSubTitle.id = 'reshdr';
             rulesSubTitle.innerHTML = 'Active rules';
             versionTitle.innerHTML = 'Version ' + VERSION;
+
             relockAllbutton.id = 'rlkall';
-            relockAllbutton.type = 'button';
-            relockAllbutton.value = 'Relock All';
-            relockAllbutton.className = 'lr-button';
+            relockAllbutton.color = 'primary';
+            relockAllbutton.textContent = 'Relock All';
+            relockAllbutton.size = 'md';
             relockAllbutton.onclick = () => {
                 relockAll();
             };
-
             cachedElements.relockAllbutton = relockAllbutton;
+            
             includeAllSegments.type = 'checkbox';
             includeAllSegments.name = "name";
             includeAllSegments.value = "value";
