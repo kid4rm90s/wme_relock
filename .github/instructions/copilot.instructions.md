@@ -2,10 +2,10 @@
 applyTo: '**/*.js'
 ---
 
-# Copilot Instructions for WME LevelReset
+# Copilot Instructions for WME Relock
 
 ## Project Overview
-WME LevelReset+ is a Tampermonkey userscript that automatically corrects lock levels of road segments and POIs in the Waze Map Editor based on external rules stored in Google Sheets. Key features:
+WME Relock+ is a Tampermonkey userscript that automatically corrects lock levels of road segments and POIs in the Waze Map Editor based on external rules stored in Google Sheets. Key features:
 - **SDK-Dependent**: Requires WME JavaScript SDK - script will not function without it
 - Fetches locking rules from external Google Sheets API (`script.googleusercontent.com`)
 - Supports city-scoped rules and multiple road types (including Ukraine-specific rules)
@@ -15,7 +15,7 @@ WME LevelReset+ is a Tampermonkey userscript that automatically corrects lock le
 ## Architecture & Data Flow
 
 ### Core Components
-1. **Bootstrap & Initialization** (`LevelReset_bootstrap()`, `LevelReset_init()`):
+1. **Bootstrap & Initialization** (`Relock_bootstrap()`, `Relock_init()`):
    - Waits for `unsafeWindow.SDK_INITIALIZED` promise
    - Validates required SDK components: DataModel, Events, State, Editing, Map
    - Waits for `wme-ready` and `wme-map-data-loaded` events before proceeding
@@ -209,7 +209,7 @@ The script implements a centralized error handling system through the `ErrorHand
 5. **Individual Processing**: Process updates individually since SDK doesn't support batch operations
 
 ## File Structure
-- `WME LevelReset.user.js` - Single-file userscript (1300+ lines)
+- `wme-relock.user.js` - Single-file userscript (1300+ lines)
 - `WME_SDK_DOCUMENTATION.md` - Local SDK reference documentation
 - `README.md` - Basic project description and differences from original
 - `.github/instructions/copilot.instructions.md` - Development guidelines and patterns
