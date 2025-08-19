@@ -23,7 +23,6 @@
 (function () {
     'use strict';
 
-    // Global constants
     const ID_KEYS = {
         MSG_HIDE: 'Relock_msgHide',
         ALL_SEGMENTS: 'Relock_allSegments',
@@ -35,18 +34,13 @@
     };
 
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    
-    // Scanning limits
     const SCAN_LIMIT_COUNT = 150;
     const POI_ID = "90000"; // Fake ID for POI to not conflict with real street IDs
     const POI_NAME = "POI";
 
-    // Global SDK instance - initialized once and used by all functions
     let wmeSDK;
 
-    // Centralized error handling system
     const ErrorHandler = {
-        // Error severity levels
         SEVERITY: {
             CRITICAL: 'critical',    // Fatal errors that prevent script from working
             ERROR: 'error',          // Errors that affect functionality but allow continuation
@@ -66,7 +60,7 @@
             const errorMsg = error instanceof Error ? error.message : String(error);
             const fullMessage = `${prefix} [${context}] ${errorMsg}`;
 
-            // Log to console based on severity - always show stack trace for better debugging
+
             switch (severity) {
                 case this.SEVERITY.CRITICAL:
                     console.error(fullMessage, error instanceof Error ? error.stack : '', additionalInfo);
@@ -84,13 +78,13 @@
                     console.error(fullMessage, error instanceof Error ? error.stack : '', additionalInfo);
             }
 
-            // Show user-facing alert for critical errors or when explicitly requested
+
             if (severity === this.SEVERITY.CRITICAL) {
                 const userMessage = `${prefix} Critical Error in ${context}\n${errorMsg}\n\nScript may not function properly.`;
                 alert(userMessage);
             }
 
-            // Return false for boolean operations, null for others
+
             return false;
         },
 
@@ -152,11 +146,8 @@
      * animateElement(row, true, 'normal', 'table-row');  // Show table row
      */
     function animateElement(element, show, speed = 'normal', displayType = 'block') {
-        // Get element if string ID was passed
         const el = typeof element === 'string' ? document.getElementById(element) : element;
         if (!el) return;
-
-        // Set transition duration based on speed (matching jQuery speeds)
         const durations = {
             'fast': 150,
             'normal': 300,
@@ -164,28 +155,23 @@
         };
         const duration = durations[speed] || durations.normal;
 
-        // Apply transition CSS
         el.style.transition = `opacity ${duration}ms ease-in-out`;
 
         if (show) {
-            // Show element: set display first, then animate opacity
             el.style.display = displayType;
             el.style.opacity = '0';
-            // Small delay to ensure display is applied before opacity change
             setTimeout(() => {
                 el.style.opacity = '1';
             }, 10);
         } else {
-            // Hide element: animate opacity first, then set display none
             el.style.opacity = '0';
             setTimeout(() => {
                 el.style.display = 'none';
-                el.style.opacity = '1'; // Reset for next time
+                el.style.opacity = '1';
             }, duration);
         }
     }
 
-    // Initialize LevelReset and do some checks
     function LevelReset_bootstrap() {
 
         const initializeSDK = async () => {
@@ -195,7 +181,7 @@
                     scriptName: GM_info.script.name
                 });
 
-                // Verify required SDK components
+
                 const requiredComponents = [
                     'DataModel',
                     'Events',
@@ -212,15 +198,11 @@
                 // Wait for WME to be fully ready
                 await wmeSDK.Events.once({ eventName: "wme-ready" });
 
-                // Verify critical conditions
                 if (!wmeSDK.State.isLoggedIn()) {
                     throw new Error('User not logged in');
                 }
 
-                // Wait for map data to be loaded
                 await wmeSDK.Events.once({ eventName: "wme-map-data-loaded" });
-
-                // Initialize the main script
                 await LevelReset_init();
 
             } catch (error) {
@@ -228,14 +210,13 @@
             }
         };
 
-        // Main initialization flow
         const waitForSDK = async () => {
             try {
                 if (unsafeWindow.SDK_INITIALIZED) {
                     await unsafeWindow.SDK_INITIALIZED;
                     await initializeSDK();
                 } else {
-                    // Retry after a short delay
+
                     await delay(500);
                     waitForSDK();
                 }
@@ -244,7 +225,7 @@
             }
         };
 
-        // Start initialization when DOM is ready
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', waitForSDK);
         } else {
@@ -254,38 +235,45 @@
 
     async function LevelReset_init() {
         try {
-            // SDK is already initialized globally, no need to get it again
+
             if (!wmeSDK) {
                 throw new Error('SDK not initialized');
             }
 
-            // Add styles with error handling
+
             const lrStyle = [
                 '.tg { border-collapse: collapse; border-spacing: 0; margin: 0px auto; }',
                 '.tg td { border-color: black; border-style: solid; border-width: 1px; overflow: hidden; padding: 2px 2px; word-break: normal; }',
                 '.tg .tg-value { text-align: center; vertical-align: top }',
                 '.tg .tg-header { background-color: #ecf4ff; border-color: #000000; font-weight: bold; text-align: center; vertical-align: top }',
-                '.tg .tg-type { text-align: left; vertical-align: top }',
-                // Add better visibility for active elements
+                '.tg .tg-type { text-align: left; vertical-align: top; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
                 '.tg-row:hover { background-color: #f5f5f5; }',
                 '.tg-row.active { background-color: #e8f0fe; }',
-                // Improved loader visibility
-                '#dotscntr { opacity: 0.8; }',
-                '#percentageLoader { transition: width 0.3s ease-in-out; }',
-                // Flex row for relock checkboxes
-                '.relock-flex-row { display: flex; align-items: center; /*min-height: 24px;*/ margin-bottom: 0; padding: 0; }',
+                '#dotscntr { opacity: 0.8; width: 16px; height: 16px; margin-left: 5px; vertical-align: text-top; display: none; }',
+                '#percentageLoader { transition: width 0.3s ease-in-out; width: 1px; height: 10px; background-color: green; margin-top: 10px; border: 1px solid #333333; display: none; }',
+                '.relock-flex-row { display: flex; align-items: center; margin-bottom: 0; padding: 0; }',
                 '.relock-flex-row > div { flex: 1 1 auto; }',
                 '.relock-flex-row input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }',
                 '.relock-flex-row label { margin-bottom: 0; font-weight: normal; max-width: 230px; text-overflow: ellipsis; white-space: nowrap; display: inline-block; overflow: hidden; vertical-align: middle; }',
                 '.relock-flex-row .relock-flex-right { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }',
                 '.relock-flex-row .relock-flex-counter { font-size: 100%; font-weight: bold; }',
+                '.lr-label { font-size: 95%; margin-left: 5px; vertical-align: middle; }',
+                '.lr-button { margin: 10px 3px 0 0; }',
+                '.lr-container { margin-right: 5px; }',
+                '.lr-info-box { font-size: 85%; padding: 15px; border: 1px solid red; border-radius: 5px; position: relative; }',
+                '.lr-alert-box { border: 1px solid #EBCCD1; background-color: #F2DEDE; color: #AC4947; font-weight: bold; font-size: 90%; border-radius: 5px; padding: 10px; margin: 5px 5px; display: none; }',
+                '.lr-close-btn { cursor: pointer; width: 16px; height: 16px; position: absolute; right: 3px; top: 3px; }',
+                '.lr-lock-icon { cursor: pointer; color: red; }',
+                '.lr-rules-table { font-size: 12px; }',
+                '.lr-lock-status-ok { color: green; }',
+                '.lr-lock-status-error { color: red; }',
             ];
 
             try {
                 GM_addStyle(lrStyle.join('\n'));
             } catch (styleError) {
                 ErrorHandler.handle(styleError, 'Style Injection', ErrorHandler.SEVERITY.WARNING);
-                // Fallback to basic styling if GM_addStyle fails
+
                 const style = document.createElement('style');
                 style.textContent = lrStyle.join('\n');
                 document.head.appendChild(style);
@@ -295,10 +283,7 @@
             return;
         }
 
-        // Script metadata and resources
         const VERSION = GM_info.script.version;
-
-        // Loading indicator image
         const loader = 'data:image/gif;base64,R0lGODlhEAAQAPQAAP///wAAAPj4+Dg4OISEhAYGBiYmJtbW1qioqBYWFnZ2dmZmZuTk5JiYmMbGxkhISFZWVgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH+GkNyZWF0ZWQgd2l0aCBhamF4bG9hZC5pbmZvACH5BAAKAAAAIf8LTkVUU0NBUEUyLjADAQAAACwAAAAAEAAQAAAFUCAgjmRpnqUwFGwhKoRgqq2YFMaRGjWA8AbZiIBbjQQ8AmmFUJEQhQGJhaKOrCksgEla+KIkYvC6SJKQOISoNSYdeIk1ayA8ExTyeR3F749CACH5BAAKAAEALAAAAAAQABAAAAVoICCKR9KMaCoaxeCoqEAkRX3AwMHWxQIIjJSAZWgUEgzBwCBAEQpMwIDwY1FHgwJCtOW2UDWYIDyqNVVkUbYr6CK+o2eUMKgWrqKhj0FrEM8jQQALPFA3MAc8CQSAMA5ZBjgqDQmHIyEAIfkEAAoAAgAsAAAAABAAEAAABWAgII4j85Ao2hRIKgrEUBQJLaSHMe8zgQo6Q8sxS7RIhILhBkgumCTZsXkACBC+0cwF2GoLLoFXREDcDlkAojBICRaFLDCOQtQKjmsQSubtDFU/NXcDBHwkaw1cKQ8MiyEAIfkEAAoAAwAsAAAAABAAEAAABVIgII5kaZ6AIJQCMRTFQKiDQx4GrBfGa4uCnAEhQuRgPwCBtwK+kCNFgjh6QlFYgGO7baJ2CxIioSDpwqNggWCGDVVGphly3BkOpXDrKfNm/4AhACH5BAAKAAQALAAAAAAQABAAAAVgICCOZGmeqEAMRTEQwskYbV0Yx7kYSIzQhtgoBxCKBDQCIOcoLBimRiFhSABYU5gIgW01pLUBYkRItAYAqrlhYiwKjiWAcDMWY8QjsCf4DewiBzQ2N1AmKlgvgCiMjSQhACH5BAAKAAUALAAAAAAQABAAAAVfICCOZGmeqEgUxUAIpkA0AMKyxkEiSZEIsJqhYAg+boUFSTAkiBiNHks3sg1ILAfBiS10gyqCg0UaFBCkwy3RYKiIYMAC+RAxiQgYsJdAjw5DN2gILzEEZgVcKYuMJiEAOwAAAAAAAAAAAA==';
 
         // Default lock levels
@@ -377,29 +362,20 @@
             if (!obj || !obj.geometry) return false;
 
             return ErrorHandler.wrapSync(() => {
-                // Since SDK doesn't provide isFeatureVisibleOnMap, implement basic viewport check
-                // For now, return true as a fallback - in a real implementation you'd calculate map bounds
-                // using the map center and zoom level
                 const mapCenter = wmeSDK.Map.getMapCenter();
                 const zoomLevel = wmeSDK.Map.getZoomLevel();
 
                 if (!mapCenter || zoomLevel === undefined) return false;
-
-                // Simple approximation - in a real implementation, you'd calculate proper bounds
-                // based on zoom level and map projection
                 const geometry = obj.geometry;
                 if (geometry.type === 'Point') {
                     const [lon, lat] = geometry.coordinates;
-                    // Simple distance check from map center (very rough approximation)
                     const distance = Math.sqrt(
                         Math.pow(lon - mapCenter.lon, 2) +
                         Math.pow(lat - mapCenter.lat, 2)
                     );
-                    // Rough visibility threshold based on zoom level
                     const threshold = Math.pow(2, (18 - zoomLevel)) * 0.01;
                     return distance < threshold;
                 } else if (geometry.type === 'LineString') {
-                    // Check if any point of the line is within approximate bounds
                     return geometry.coordinates.some(([lon, lat]) => {
                         const distance = Math.sqrt(
                             Math.pow(lon - mapCenter.lon, 2) +
@@ -409,7 +385,7 @@
                         return distance < threshold;
                     });
                 }
-                return true; // Default to visible if we can't determine
+                return true;
             }, 'Viewport Visibility Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
@@ -424,7 +400,6 @@
             if (!venue || !venue.id) return false;
 
             return ErrorHandler.wrapSync(() => {
-                // Check if venue is not ad-locked and user has edit permissions
                 return !venue.isAdLocked && wmeSDK.DataModel.Venues.hasPermissions({
                     permission: "EDIT_GEOMETRY",
                     venueId: venue.id
@@ -436,7 +411,6 @@
             if (!segment || !segment.id) return false;
 
             return ErrorHandler.wrapSync(() => {
-                // Check if segment has no closures and user has edit permissions
                 return !segment.hasClosures && wmeSDK.DataModel.Segments.hasPermissions({
                     permission: "EDIT_PROPERTIES",
                     segmentId: segment.id
@@ -444,17 +418,10 @@
             }, 'Segment Editability Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
-        /**
-         * Update segment lock rank using SDK
-         * @param {Object} segment - The segment to update
-         * @param {number} newLockRank - New lock rank to set
-         * @returns {Promise<boolean>} Success status
-         */
         async function updateSegmentLock(segment, newLockRank) {
             if (!segment || !segment.id) return false;
 
             try {
-                // Verify permissions first
                 if (!wmeSDK.DataModel.Segments.hasPermissions({
                     permission: "EDIT_PROPERTIES",
                     segmentId: segment.id
@@ -462,8 +429,6 @@
                     ErrorHandler.handle(`No permission to edit segment: ${segment.id}`, 'Segment Permission Check', ErrorHandler.SEVERITY.WARNING);
                     return false;
                 }
-
-                // Update the segment's lock rank
                 await wmeSDK.DataModel.Segments.updateSegment({
                     segmentId: segment.id,
                     lockRank: newLockRank
@@ -476,17 +441,10 @@
             }
         }
 
-        /**
-         * Update venue lock rank using SDK
-         * @param {Object} venue - The venue to update
-         * @param {number} newLockRank - New lock rank to set
-         * @returns {Promise<boolean>} Success status
-         */
         async function updateVenueLock(venue, newLockRank) {
             if (!venue || !venue.id) return false;
 
             try {
-                // Verify permissions first
                 if (!wmeSDK.DataModel.Venues.hasPermissions({
                     permission: "EDIT_GEOMETRY",
                     venueId: venue.id
@@ -494,8 +452,6 @@
                     ErrorHandler.handle(`No permission to edit venue: ${venue.id}`, 'Venue Permission Check', ErrorHandler.SEVERITY.WARNING);
                     return false;
                 }
-
-                // Update the venue's lock rank
                 await wmeSDK.DataModel.Venues.updateVenue({
                     venueId: venue.id,
                     lockRank: newLockRank
@@ -508,33 +464,19 @@
             }
         }
 
-        /**
-         * Get road type based on segment properties
-         * @param {Object} segment - The segment to check
-         * @returns {string|null} Road type name or null if not found
-         */
         function getRoadType(segment) {
             if (!segment || !segment.roadType) return null;
 
             return ErrorHandler.wrapSync(() => {
-                // If respecting routing road type is enabled, check that first
                 if (localStorage.getItem(ID_KEYS.RESPECT_ROUTING) === 'true' && segment.routingRoadType) {
                     const routingType = roadTypeConfig[segment.routingRoadType];
                     if (routingType) return routingType.sdkType;
                 }
-
-                // Fall back to regular road type
                 const roadType = roadTypeConfig[segment.roadType];
                 return roadType ? roadType.sdkType : null;
             }, 'Road Type Determination', ErrorHandler.SEVERITY.WARNING)();
         }
 
-        /**
-         * Check if an object should be reset based on current settings
-         * @param {Object} obj - The segment or venue to check
-         * @param {number} targetLock - Target lock level
-         * @returns {boolean} Whether the object should be reset
-         */
         function shouldResetLock(obj, targetLock) {
             if (!obj || typeof obj.lockRank !== 'number' || typeof targetLock !== 'number') {
                 return false;
@@ -542,7 +484,6 @@
 
             return ErrorHandler.wrapSync(() => {
                 const resetHigher = localStorage.getItem(ID_KEYS.ALL_SEGMENTS) === 'true';
-                // Reset if current lock is lower OR if resetHigher is enabled
                 return obj.lockRank < targetLock || (resetHigher && obj.lockRank > targetLock);
             }, 'Lock Reset Condition Check', ErrorHandler.SEVERITY.WARNING)();
         }
@@ -563,11 +504,6 @@
             w.location = res.finalUrl;
         }
 
-        /**
-         * Send HTTP request using async/await pattern
-         * @param {string} url - URL to request
-         * @returns {Promise<Object>} Response object
-         */
         async function sendHTTPRequest(url) {
             return new Promise((resolve, reject) => {
                 GM_xmlhttpRequest({
@@ -578,7 +514,6 @@
                         resolve(res);
                     },
                     onreadystatechange: function (res) {
-                        // fill if needed
                     },
                     ontimeout: function (res) {
                         const error = new Error('Request timeout');
@@ -628,15 +563,9 @@
             return result;
         }
 
-        /**
-         * Fetch and process locking rules from external source
-         * @returns {Promise<void>}
-         */
         async function getAllLockRules() {
             try {
                 const url = `https://script.google.com/macros/s/${rulesHash}/exec?func=getAllLockRulesV2`;
-
-                // Use the async HTTP request function
                 const response = await sendHTTPRequest(url);
 
                 if (!validateHTTPResponse(response)) {
@@ -647,8 +576,6 @@
                 if (data.result !== "success") {
                     throw new Error('Failed to get locking rules: ' + (data.error || 'Unknown error'));
                 }
-
-                // Initialize UI with the rules
                 await initUI(data.rules);
 
             } catch (err) {
@@ -656,20 +583,12 @@
             }
         }
 
-        // Flag to track if a scan is in progress
         let isScanInProgress = false;
-
-        // UI element references for reuse (avoid repeated DOM queries)
         let cachedElements = {
             relockAllbutton: null
         };
 
-        /**
-         * Comprehensive scan function for relock preparation
-         * @returns {Promise<void>}
-         */
         const scanArea = ErrorHandler.wrapAsync(async () => {
-            // If a scan is already in progress, skip this one
             if (isScanInProgress) {
                 console.debug('LevelReset: Scan already in progress, skipping...');
                 return;
@@ -688,8 +607,6 @@
                     return;
                 }
                 const userlevel = userInfo.rank + 1;
-
-                // UI elements needed for relocking mode
                 let respectRouting = document.getElementById(ID_KEYS.RESPECT_ROUTING);
 
                 if (!(cachedElements.relockAllbutton && respectRouting)) {
@@ -697,35 +614,25 @@
                 }
 
                 hideInactiveCities();
-
-                // Initialize relock object
                 Object.values(roadTypeConfig).forEach(function (street) {
                     if (street.sdkType) {
                         relockObject[street.sdkType] = [];
                     }
                 });
 
-                // Set up relocking parameters
                 let foundBadlocks = false;
                 let respectRoutingRoadType = respectRouting.checked;
                 let count = 0;
-
-                // Choose country lock settings
                 let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : defaultLocks;
                 console.debug("LevelReset: Rules to be used", ABBR);
-
-                // Disable unchecked road types
                 Object.entries(roadTypeConfig).forEach(([key, value]) => {
                     let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType + ID_KEYS.ELM_CHK;
                     let chk = document.getElementById(idPrefix);
                     value.scan = (chk && chk.checked);
                 });
 
-                // Get all data
                 const segments = wmeSDK.DataModel.Segments.getAll();
                 const venues = wmeSDK.DataModel.Venues.getAll();
-
-                // Process segments
                 for (const segment of segments) {
                     try {
                         if (!onScreen(segment)) continue;
@@ -760,7 +667,7 @@
                         const stLocks = cityRules ? cityRules.Locks : ABBR;
                         const desiredLockLevel = stLocks[curStreet.sdkType] - 1;
 
-                        // setLockLevel logic inline
+
                         const includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
                         const allSegmentsInclude = includeAllSegments.checked && userlevel > 4;
                         if (userlevel > desiredLockLevel) {
@@ -780,7 +687,7 @@
                     }
                 }
 
-                // Process venues (POIs)
+
                 if (roadTypeConfig[POI_ID] && roadTypeConfig[POI_ID].scan) {
                     venues.forEach(venue => {
                         if (!onScreen(venue)) return;
@@ -788,7 +695,7 @@
                         if (hasPendingUR(venue.id)) return;
                         if (count >= SCAN_LIMIT_COUNT) return;
 
-                        // Full relocking logic for POIs
+
                         const address = wmeSDK.DataModel.Venues.getAddress({ venueId: venue.id });
                         const cityID = address && address.street ? address.street.cityId : null;
 
@@ -797,7 +704,7 @@
                             : ABBR[POI_NAME];
                         desiredLockLevel--;
 
-                        // setLockLevel logic for venues
+
                         const includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
                         const allSegmentsInclude = includeAllSegments.checked && userlevel > 4;
                         if (userlevel > desiredLockLevel) {
@@ -814,7 +721,7 @@
                     });
                 }
 
-                // Update results UI for relocking mode
+
                 Object.entries(relockObject).forEach(([key, value]) => {
                     let idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
                     let __prntRight = document.getElementById(idPrefix);
@@ -836,7 +743,7 @@
                         if (!__lckRight) {
                             __lckRight = document.createElement('div');
                             __lckRight.className = 'fa fa-lock';
-                            __lckRight.style.cssText = 'cursor:pointer;color:red;';
+                            __lckRight.className = 'fa fa-lock lr-lock-icon';
                             __lckRight.onclick = function () {
                                 relock(relockObject, key);
                             };
@@ -854,32 +761,35 @@
                 if (foundBadlocks) {
                     cachedElements.relockAllbutton.removeAttribute('disabled');
                     const lockColorElement = document.getElementById('lockcolor');
-                    if (lockColorElement) {
-                        lockColorElement.style.color = 'red';
-                    }
+                    updateLockStatusIcon(lockColorElement, true);
                 } else {
                     cachedElements.relockAllbutton.setAttribute('disabled', true);
                     const lockColorElement = document.getElementById('lockcolor');
-                    if (lockColorElement) {
-                        lockColorElement.style.color = 'green';
-                    }
+                    updateLockStatusIcon(lockColorElement, false);
                 }
             } finally {
-                // Always reset the scan flag when done
                 isScanInProgress = false;
             }
         }, 'Area Scanning', ErrorHandler.SEVERITY.WARNING);
 
+        /**
+         * Update lock status icon with appropriate CSS class
+         * @param {HTMLElement} element - The lock icon element
+         * @param {boolean} hasErrors - Whether there are lock errors
+         */
+        function updateLockStatusIcon(element, hasErrors) {
+            if (!element) return;
+            
+            element.className = hasErrors 
+                ? 'fa fa-lock lr-lock-status-error' 
+                : 'fa fa-lock lr-lock-status-ok';
+        }
+
         async function initUI(rules) {
             rulesDB = rules;
 
-            // Initialize road types from SDK now that it's ready
             roadTypeConfig = initializeRoadTypes();
-
-            // Create sidebar tab (registerScriptTab returns a Promise)
             const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab();
-
-            // Create UI elements
             let relockContent = document.createElement('div');
             let relockTitle = document.createElement('wz-overline');
             let relockSubTitle = document.createElement('wz-label');
@@ -900,27 +810,22 @@
             let respectRoutingLabel = document.createElement('label');
             let percentageLoader = document.createElement('div');
             let relockTabLabel = document.createTextNode('Re-lock Segments & POI');
-
-            // Create lock status indicator for tab label
             const lockStatusIcon = document.createElement('span');
             lockStatusIcon.id = 'lockcolor';
-            lockStatusIcon.className = 'fa fa-lock';
-            lockStatusIcon.style.color = 'green'; // Default to green (no issues found)
+            lockStatusIcon.className = 'fa fa-lock lr-lock-status-ok';
             
             tabLabel.innerHTML = "Re-";
             tabLabel.appendChild(lockStatusIcon);
             relockTitle.appendChild(relockTabLabel);
-
-            // fill tab
             relockSub.innerHTML = 'Your on-screen area is automatically scanned when you load or pan around. Pressing the lock behind each type will relock only those results, or you can choose to relock all.<br/><br/>You can only relock segments lower or equal to your current editor level. Segments locked higher than normal are left alone.';
-            relockSub.style.cssText = 'font-size:85%;padding:15px;border:1px solid red;border-radius:5px;position:relative';
+            relockSub.className = 'lr-info-box';
             relockSub.id = 'sub';
             hidebutton.style.cssText = 'cursor:pointer;width:16px;height:16px;position:absolute;right:3px;top:3px;background-image:url(\'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAAAWdEVYdENyZWF0aW9uIFRpbWUAMTEvMjAvMTVnsXrkAAADTUlEQVQ4jW2TW0xbZQCAv3ODnpYWegEGo1wKwzBcxAs6dONSjGMm3kjmnBqjYqLREE2WLDFTIBmbmmxRpzHy4NPi4zRLfNBlZjjtnCEaOwYDJUDcVqC3UzpWTkt7fp80hvk9f/nePkkIwWb+gA5jMXLQjK50Zc2cuKVp4wlX2UevtAYubnal/waWoTI1N38keu7ck2uTl335ZFJCkpE8XlGob4ibgeZvMl7P8MtdO6/dFohDe/Sn0LdzJ457MuHfUYqLkYtsSIqMJASyIiNv30Gm6+G1zNbqvpf6gqF/AwaUXx+/MDdz6KArH4ujVVRAbgPVroMsQz6P6nJiGUnUGj/pR/tTyx2dtW+11t2UAa5Pz34w//GHLitpsG1wkODp0xQ11GOZJpgmzq5uqo8ew76zAxFPUDJxscwzFR4BkGfh/tj58/3Zq9OoFZU0PHsAd00NnWNj6IEApd3duA48g2nXKenpQSl1oceWsUeuPfdp+M9GZf/zA5+lz3x9lxRbAUli+dIlKnt7Ud1uCk1NJH0+VnMmq6EQfw0NUzCSULBQfT4HVf4iNRO50VlIGSi6jup0sj5zlTO7d9N48iRLa2vkCwWsyTArbx/GAaSBm/MLyLm85OjZs0c2zawQsoRmt5NeXCRyeRLh9rBkGBSEwF6i09h+L96GemyAx2bDK4ENkGRJkbM2fVy4PRhT08RmZvH09VE29C6ixEFuahL3hklLby9PhEKUt7VRZln4kHD669Bqtl6Q7W07jqWL9FQiEkHTdUoGBsgXF5EPh0m8M8Tc62/CSoLSqmqaR4ZxaRpenxfbgw8lCy2Nx5Uv3xuNXEll7shO/HI38Rjr09NImkriyCgOy0JZTZM4+x3C7SY+epTaLZWsdwXJPNV/6jF/9ReSEIKzmcKWpbHPF9OHDxUr6xksoAiQJAmnpuEWAqeq4G9uRr7nPpZeeDG10NqybV+5Ly4DPGJXlsv79u51v38iK22/EwmwACEEIpdD2tjApmncan8A49XX4qtNgeC+cl/8tpm+jxoBY+K3N7I/jj+dvxKuIhZV7KpKWV295dy1K6YEg1/NO2wj+/210f+98R9+hub0wo1BOZnslRVV16orf0hVeD55HH7d7P4N0V1gY9/zcaEAAAAASUVORK5CYII=\');';
             hidebutton.onclick = () => {
                 localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
                 animateElement('sub', false, 'slow');
             };
-            dotscntr.style.cssText = 'width:16px;height:16px;margin-left:5px;background:url("' + loader + '");vertical-align:text-top;display:none';
+            dotscntr.style.backgroundImage = `url("${loader}")`;
             dotscntr.id = 'dotscntr';
             relockSubTitle.innerHTML = 'Results (limited to ' + SCAN_LIMIT_COUNT + ' per pass)';
             relockSubTitle.id = 'reshdr';
@@ -929,15 +834,12 @@
             relockAllbutton.id = 'rlkall';
             relockAllbutton.type = 'button';
             relockAllbutton.value = 'Relock All';
-            relockAllbutton.style.cssText = 'margin: 10px 3px 0 0';
+            relockAllbutton.className = 'lr-button';
             relockAllbutton.onclick = () => {
                 relockAll();
             };
 
-            // Store references to avoid repeated DOM queries
             cachedElements.relockAllbutton = relockAllbutton;
-
-            // Also reset higher locked segments?
             includeAllSegments.type = 'checkbox';
             includeAllSegments.name = "name";
             includeAllSegments.value = "value";
@@ -950,7 +852,7 @@
             };
             includeAllSegmentsLabel.htmlFor = ID_KEYS.ALL_SEGMENTS;
             includeAllSegmentsLabel.innerHTML = 'Also reset higher locked objects';
-            includeAllSegmentsLabel.style.cssText = 'font-size:95%;margin-left:5px;vertical-align:middle';
+            includeAllSegmentsLabel.className = 'lr-label';
 
             // Respect routing road type
             respectRouting.type = 'checkbox';
@@ -964,13 +866,10 @@
             };
             respectRoutingLabel.htmlFor = ID_KEYS.RESPECT_ROUTING;
             respectRoutingLabel.innerHTML = 'Respect routing road type';
-            respectRoutingLabel.style.cssText = 'font-size:95%;margin-left:5px;vertical-align:middle';
+            respectRoutingLabel.className = 'lr-label';
 
-            resultsCntr.style.cssText = 'margin-right:5px;';
-
-            // add results empty list
+            resultsCntr.className = 'lr-container';
             Object.entries(roadTypeConfig).forEach(([key, value]) => {
-                // Create UI elements for road type (flex row)
                 let __cntr = document.createElement('div');
                 __cntr.className = 'relock-flex-row';
 
@@ -988,7 +887,7 @@
                 };
                 __lblLeft.htmlFor = idPrefix + ID_KEYS.ELM_CHK;
                 __lblLeft.innerHTML = value.typeName;
-                __lblLeft.title = value.typeName; // Show full name on hover
+                __lblLeft.title = value.typeName;
 
                 __keyLeft.appendChild(__chkLeft);
                 __keyLeft.appendChild(__lblLeft);
@@ -1000,19 +899,13 @@
                 __cntRight.textContent = '-';
                 __prntRight.id = idPrefix + ID_KEYS.ROAD_TYPE_VALUE;
                 __prntRight.appendChild(__cntRight);
-
-                // Add to stage
                 __cntr.appendChild(__keyLeft);
                 __cntr.appendChild(__prntRight);
                 resultsCntr.appendChild(__cntr);
             });
-
-            // Alert box
             alertCntr.id = "alertCntr";
-            alertCntr.style.cssText = 'border:1px solid #EBCCD1;background-color:#F2DEDE;color:#AC4947;font-weight:bold;font-size:90%;border-radius:5px;padding:10px;margin:5px 5px;display:none';
+            alertCntr.className = 'lr-alert-box';
             alertCntr.innerHTML = 'Watch out for map exceptions, some higher locks are there for a reason!';
-
-            // Rules table
             let rowElm;
             let colElm;
 
@@ -1035,7 +928,7 @@
 
                     rowElm = document.createElement('tr');
                     rowElm.className = "tg-row";
-                    rowElm.dataset.name = parseInt(key) === 0 ? 'country' : value.CityName; // need to hard code 'country' to identify later
+                    rowElm.dataset.name = parseInt(key) === 0 ? 'country' : value.CityName;
                     
                     colElm = document.createElement('td');
                     colElm.className = "tg-header";
@@ -1056,13 +949,10 @@
                             if (colIndex < maxCol) {
                                 colElm = document.createElement('td');
                                 colElm.className = "tg-type";
-                                colElm.style.maxWidth = maxColWidth + 'px';
-                                colElm.style.whiteSpace = 'nowrap';
-                                colElm.style.overflow = 'hidden';
-                                colElm.style.textOverflow = 'ellipsis';
+
                                 const streetType = getTypeNameBySdkType(k) || k;
                                 colElm.innerHTML = streetType;
-                                colElm.title = streetType; // Show full name on hover
+                                colElm.title = streetType;
                                 rowElm.appendChild(colElm);
 
                                 colElm = document.createElement('td');
@@ -1084,18 +974,13 @@
             }
 
             tableElm.appendChild(bodyElm);
-            rulesCntr.style.cssText = 'font-size:12px';
+            rulesCntr.className = 'lr-rules-table';
             rulesCntr.appendChild(tableElm);
 
             // add to stage
             relockContent.appendChild(relockTitle);
             relockContent.appendChild(versionTitle);
-
-            // Loader bar
             percentageLoader.id = 'percentageLoader';
-            percentageLoader.style.cssText = 'width:1px;height:10px;background-color:green;margin-top:10px;border:1px solid:#333333;display:none';
-
-            // only show if user didn't hide it before
             if (localStorage.getItem(ID_KEYS.MSG_HIDE) !== '1') {
                 relockSub.appendChild(hidebutton);
                 relockContent.appendChild(relockSub);
@@ -1119,7 +1004,7 @@
 
             tabPane.appendChild(relockContent);
 
-            // Register event handlers using SDK with proper error handling
+
             const eventHandlers = [];
 
             function registerEventHandler(eventName, handler) {
@@ -1133,19 +1018,9 @@
                 }, `Event Handler Registration (${eventName})`, ErrorHandler.SEVERITY.ERROR)();
             }
 
-            // Create different handlers for different events
-            const scanHandler = () => scanArea(); // All events now use the same handler
-
-            // Register for map data changes
-            //registerEventHandler("wme-map-data-loaded", scanHandler);
-
-            // Register for map movements
+            const scanHandler = () => scanArea();
             registerEventHandler("wme-map-move-end", scanHandler);
-
-            // Register for edits
             registerEventHandler("wme-after-edit", scanHandler);
-
-            // Clean up function for event handlers
             function cleanup() {
                 eventHandlers.forEach(handler => {
                     try {
@@ -1157,24 +1032,17 @@
                 eventHandlers.length = 0;
             }
 
-            // Register cleanup handlers
+
             const cleanupScript = () => {
                 try {
-                    // Remove event handlers
                     cleanup();
-
-                    // Clean up UI elements
                     const tabElement = document.getElementById('sidepanel-relockTab');
                     if (tabElement) {
                         tabElement.remove();
                     }
-
-                    // Clean up any active operations
                     if (window.relockTimer) {
                         clearTimeout(window.relockTimer);
                     }
-
-                    // Remove any remaining loaders
                     const loader = document.getElementById('dotscntr');
                     if (loader) {
                         loader.style.display = 'none';
@@ -1186,12 +1054,10 @@
                 }
             };
 
-            // Register cleanup for both unload and disable scenarios
+
             if (typeof window.addEventListener === 'function') {
                 window.addEventListener('beforeunload', cleanupScript);
             }
-
-            // Register for undo/redo operations
             wmeSDK.Events.on({
                 eventName: "wme-after-undo",
                 eventHandler: scanHandler
@@ -1201,8 +1067,6 @@
                 eventName: "wme-no-edits",
                 eventHandler: scanHandler
             });
-
-            // Initial scan
             relockShowAlert();
             scanHandler();
         }
