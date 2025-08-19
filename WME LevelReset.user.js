@@ -271,7 +271,14 @@
                 '.tg-row.active { background-color: #e8f0fe; }',
                 // Improved loader visibility
                 '#dotscntr { opacity: 0.8; }',
-                '#percentageLoader { transition: width 0.3s ease-in-out; }'
+                '#percentageLoader { transition: width 0.3s ease-in-out; }',
+                // Flex row for relock checkboxes
+                '.relock-flex-row { display: flex; align-items: center; /*min-height: 24px;*/ margin-bottom: 0; padding: 0; }',
+                '.relock-flex-row > div { flex: 1 1 auto; }',
+                '.relock-flex-row input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }',
+                '.relock-flex-row label { margin-bottom: 0; font-weight: normal; max-width: 230px; text-overflow: ellipsis; white-space: nowrap; display: inline-block; overflow: hidden; vertical-align: middle; }',
+                '.relock-flex-row .relock-flex-right { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }',
+                '.relock-flex-row .relock-flex-counter { font-size: 100%; font-weight: bold; }',
             ];
 
             try {
@@ -765,13 +772,6 @@
                                 });
                                 foundBadlocks = true;
                                 count++;
-
-                                // Update UI counter for this road type
-                                const countElement = document.getElementById(ID_KEYS.ELM_PREFIX + curStreet.sdkType + ID_KEYS.ROAD_TYPE_VALUE);
-                                if (countElement) {
-                                    const currentCount = parseInt(countElement.textContent) || 0;
-                                    countElement.textContent = currentCount + 1;
-                                }
                             }
                         }
                     } catch (segmentError) {
@@ -814,31 +814,40 @@
                     });
                 }
 
-                // Build results UI for relocking mode
+                // Update results UI for relocking mode
                 Object.entries(relockObject).forEach(([key, value]) => {
-                    let __lckRight = document.createElement('div');
-                    let __cntRight = document.createElement('div');
                     let idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
-
                     let __prntRight = document.getElementById(idPrefix);
-                    __prntRight.innerHTML = '';
+                    if (!__prntRight) return;
 
-                    __cntRight.style.cssText = 'float:right';
-                    __lckRight.style.cssText = 'width:15px;float:right;padding:2px 0 0 8px;cursor:pointer;';
+                    // Find existing elements or create them if they don't exist
+                    let __lckRight = __prntRight.querySelector('.fa.fa-lock');
+                    let __cntRight = __prntRight.querySelector('.relock-flex-counter');
 
-                    if (value.length !== 0) {
-                        __cntRight.innerHTML = '<b>' + value.length + '</b>';
-                        __lckRight.className = 'fa fa-lock';
-                        __lckRight.style.cssText += 'color:red;';
-                        __lckRight.onclick = function () {
-                            relock(relockObject, key);
-                        };
-                        __prntRight.appendChild(__lckRight);
-                    } else {
-                        __cntRight.textContent = '-';
+                    if (!__cntRight) {
+                        __cntRight = document.createElement('div');
+                        __cntRight.className = 'relock-flex-counter';
+                        __prntRight.appendChild(__cntRight);
                     }
 
-                    __prntRight.appendChild(__cntRight);
+                    if (value.length !== 0) {
+                        __cntRight.textContent = value.length;
+                        
+                        if (!__lckRight) {
+                            __lckRight = document.createElement('div');
+                            __lckRight.className = 'fa fa-lock';
+                            __lckRight.style.cssText = 'cursor:pointer;color:red;';
+                            __lckRight.onclick = function () {
+                                relock(relockObject, key);
+                            };
+                            __prntRight.insertBefore(__lckRight, __cntRight);
+                        }
+                    } else {
+                        __cntRight.textContent = '-';
+                        if (__lckRight) {
+                            __lckRight.remove();
+                        }
+                    }
                 });
 
                 // Update relock button state
@@ -961,46 +970,40 @@
 
             // add results empty list
             Object.entries(roadTypeConfig).forEach(([key, value]) => {
-                // Create UI elements for road type
+                // Create UI elements for road type (flex row)
                 let __cntr = document.createElement('div');
+                __cntr.className = 'relock-flex-row';
+
                 let __keyLeft = document.createElement('div');
-                let __prntRight = document.createElement('div');
-                let __cntRight = document.createElement('div');
-                let __cleardiv = document.createElement("div");
                 let __chkLeft = document.createElement('input');
                 let __lblLeft = document.createElement('label');
                 let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType;
-
-                // Begin building
-                __keyLeft.style.cssText = 'float:left';
 
                 __chkLeft.type = 'checkbox';
                 __chkLeft.checked = (localStorage.getItem(idPrefix + ID_KEYS.ELM_CHK) == 'true');
                 __chkLeft.id = idPrefix + ID_KEYS.ELM_CHK;
                 __chkLeft.onclick = function () {
                     localStorage.setItem(idPrefix + ID_KEYS.ELM_CHK, __chkLeft.checked.toString());
-                    scanArea(); // No parameters needed
+                    scanArea();
                 };
                 __lblLeft.htmlFor = idPrefix + ID_KEYS.ELM_CHK;
                 __lblLeft.innerHTML = value.typeName;
-                __lblLeft.style.cssText = 'margin-bottom:0px;font-weight:normal;';
+                __lblLeft.title = value.typeName; // Show full name on hover
 
                 __keyLeft.appendChild(__chkLeft);
                 __keyLeft.appendChild(__lblLeft);
 
-                __cntRight.style.cssText = 'float:right';
+                let __prntRight = document.createElement('div');
+                __prntRight.className = 'relock-flex-right';
+                let __cntRight = document.createElement('div');
+                __cntRight.className = 'relock-flex-counter';
                 __cntRight.textContent = '-';
-
                 __prntRight.id = idPrefix + ID_KEYS.ROAD_TYPE_VALUE;
-                __prntRight.style.cssText = 'float:right';
                 __prntRight.appendChild(__cntRight);
-
-                __cleardiv.style.cssText = 'clear:both;';
 
                 // Add to stage
                 __cntr.appendChild(__keyLeft);
                 __cntr.appendChild(__prntRight);
-                __cntr.appendChild(__cleardiv);
                 resultsCntr.appendChild(__cntr);
             });
 
@@ -1033,15 +1036,17 @@
                     rowElm = document.createElement('tr');
                     rowElm.className = "tg-row";
                     rowElm.dataset.name = parseInt(key) === 0 ? 'country' : value.CityName; // need to hard code 'country' to identify later
-
+                    
                     colElm = document.createElement('td');
                     colElm.className = "tg-header";
-                    colElm.innerHTML = parseInt(key) === 0 ? countryRules.CountryName : value.CityName;
+                    const cityName = parseInt(key) === 0 ? countryRules.CountryName : value.CityName;
+                    colElm.innerHTML = cityName;
                     colElm.colSpan = 6;
                     rowElm.appendChild(colElm);
                     tableElm.appendChild(rowElm);
 
-                    const maxCol = 3;
+                    const maxCol = 2;
+                    const maxColWidth = 140;
                     let colIndex = 0;
                     rowElm = document.createElement('tr');
                     Object.entries(value.Locks).forEach(([k, v]) => {
@@ -1051,7 +1056,13 @@
                             if (colIndex < maxCol) {
                                 colElm = document.createElement('td');
                                 colElm.className = "tg-type";
-                                colElm.innerHTML = getTypeNameBySdkType(k) || k;
+                                colElm.style.maxWidth = maxColWidth + 'px';
+                                colElm.style.whiteSpace = 'nowrap';
+                                colElm.style.overflow = 'hidden';
+                                colElm.style.textOverflow = 'ellipsis';
+                                const streetType = getTypeNameBySdkType(k) || k;
+                                colElm.innerHTML = streetType;
+                                colElm.title = streetType; // Show full name on hover
                                 rowElm.appendChild(colElm);
 
                                 colElm = document.createElement('td');
