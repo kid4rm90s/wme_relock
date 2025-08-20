@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.20.001
+// @version      2025.08.20.005
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -50,9 +50,7 @@
         relockAllbutton: null,
         lockColorElement: null,
         checkboxElements: {}, // Cache for road type checkboxes
-        respectRoutingElement: null, // Cache for respect routing checkbox
-        dotscntrElement: null, // Cache for progress loader
-        percentageLoaderElement: null // Cache for percentage display
+        respectRoutingElement: null // Cache for respect routing checkbox
     };
 
     const REQUEST_TIMEOUT = 20000; // in ms
@@ -212,31 +210,133 @@
     }
 
     /**
-     * Utility function to show/hide progress loading elements
-     * Optimizes repeated code patterns for managing dotscntr and percentageLoader elements
-     * Uses global cachedElements object and animateElement for consistent behavior
-     * @param {boolean} show - true to show, false to hide progress elements
-     * @param {number|null} progressWidth - Width for percentage loader in pixels (e.g., 50, 100)
+     * Centralized progress manager for all operations (scanning, relocking)
+     * Fully self-contained with complete ownership of progress elements
+     * Manages both spinner and progress bar with optimized performance
      */
-    function toggleProgressElements(show = false, progressWidth = null) {
-        if (cachedElements.dotscntrElement) {
-            if (show) {
-                cachedElements.dotscntrElement.style.display = 'inline-block';
-            } else {
-                animateElement(cachedElements.dotscntrElement, false, 'normal');
-            }
-        }
-        if (cachedElements.percentageLoaderElement) {
-            if (show) {
-                cachedElements.percentageLoaderElement.style.display = 'block';
-                if (progressWidth !== null) {
-                    cachedElements.percentageLoaderElement.style.width = progressWidth + 'px';
+    const ProgressManager = {
+        containerWidth: null,
+        dotscntrElement: null,
+        percentageLoaderElement: null,
+        
+        /**
+         * Internal method to show/hide progress elements
+         * Handles both spinner and progress bar with optimized calculations
+         * @param {boolean} show - true to show, false to hide progress elements
+         * @param {number|null} progressWidth - Width for percentage loader in pixels
+         */
+        _toggleElements(show = false, progressWidth = null) {
+            if (this.dotscntrElement) {
+                if (show) {
+                    this.dotscntrElement.style.display = 'inline-block';
+                } else {
+                    animateElement(this.dotscntrElement, false, 'normal');
                 }
-            } else {
-                animateElement(cachedElements.percentageLoaderElement, false, 'normal');
             }
+            if (this.percentageLoaderElement) {
+                if (show) {
+                    this.percentageLoaderElement.style.display = 'block';
+                    if (progressWidth !== null) {
+                        this.percentageLoaderElement.style.width = progressWidth + 'px';
+                    }
+                } else {
+                    animateElement(this.percentageLoaderElement, false, 'normal');
+                }
+            }
+        },
+        
+        /**
+         * Initialize progress manager - fully self-contained initialization
+         * Creates and caches all required DOM elements and container width
+         * @param {HTMLElement} relockContent - The main content container to append progress elements to
+         */
+        init(relockContent = null) {
+            // Cache container width for performance
+            const container = document.getElementById('sidepanel-relockTab') || relockContent;
+            this.containerWidth = container ? container.offsetWidth : 300;
+            
+            // Create spinner element if not already done
+            if (!this.dotscntrElement) {
+                this.dotscntrElement = document.getElementById('dotscntr');
+                if (!this.dotscntrElement) {
+                    // Create spinner element if it doesn't exist
+                    this.dotscntrElement = document.createElement('div');
+                    this.dotscntrElement.className = 'fa fa-spinner fa-spin';
+                    this.dotscntrElement.id = 'dotscntr';
+                    this.dotscntrElement.style.display = 'none';
+                    
+                    // Append to container if available
+                    if (relockContent) {
+                        relockContent.appendChild(this.dotscntrElement);
+                    }
+                }
+            }
+            
+            // Create progress bar element if not already done
+            if (!this.percentageLoaderElement) {
+                this.percentageLoaderElement = document.getElementById('percentageLoader');
+                if (!this.percentageLoaderElement) {
+                    // Create progress bar element if it doesn't exist
+                    this.percentageLoaderElement = document.createElement('div');
+                    this.percentageLoaderElement.id = 'percentageLoader';
+                    this.percentageLoaderElement.style.display = 'none';
+                    
+                    // Append to container if available
+                    if (relockContent) {
+                        relockContent.appendChild(this.percentageLoaderElement);
+                    }
+                }
+            }
+            
+            console.debug(`${SCRIPT_LOG_PREFIX} ProgressManager initialized with container width:`, this.containerWidth);
+        },
+        
+        /**
+         * Start progress tracking for any operation
+         * @param {string} operationType - 'scan' or 'relock' for logging
+         */
+        start(operationType = 'operation') {
+            if (!this.containerWidth || !this.dotscntrElement || !this.percentageLoaderElement) {
+                this.init();
+            }
+            this._toggleElements(true, 1); // Show with minimal width
+            console.debug(`${SCRIPT_LOG_PREFIX} Started ${operationType} with progress tracking`);
+        },
+        
+        /**
+         * Update progress bar based on current/total items
+         * @param {number} current - Current item count
+         * @param {number} total - Total item count
+         * @param {number} throttle - Update every N items for performance (default: 5)
+         */
+        update(current, total, throttle = 5) {
+            // Throttle updates for performance - only update every N items
+            if (current % throttle !== 0 && current !== total) return;
+            
+            if (total <= 0) return;
+            
+            const progress = Math.min((current / total) * 100, 100);
+            const newWidth = Math.max((progress / 100) * this.containerWidth, 1);
+            
+            this._toggleElements(true, newWidth);
+        },
+        
+        /**
+         * Complete progress tracking and hide all elements
+         */
+        complete() {
+            this._toggleElements(false);
+        },
+        
+        /**
+         * Reset progress manager state (useful for cleanup)
+         */
+        reset() {
+            this.containerWidth = null;
+            this.dotscntrElement = null;
+            this.percentageLoaderElement = null;
         }
-    }
+    };
 
     function Relock_bootstrap() {
 
@@ -646,12 +746,17 @@
             }
         }
 
-        const scanArea = ErrorHandler.wrapAsync(async () => {
+        const scanArea = ErrorHandler.wrapAsync(async (showLoader = true) => {
             try {
                 const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
                 if (!topCountry || !topCountry.abbr) {
                     ErrorHandler.handle('Top country not found or invalid', 'Country Retrieval', ErrorHandler.SEVERITY.ERROR);
                     return;
+                }
+
+                // Start progress tracking for scanning
+                if (showLoader) {
+                    ProgressManager.start('scan');
                 }
 
                 hideInactiveCities();
@@ -668,10 +773,20 @@
 
                 const segments = wmeSDK.DataModel.Segments.getAll();
                 const venues = wmeSDK.DataModel.Venues.getAll();
+                
+                // Calculate total items for progress tracking
+                const totalItems = Math.min(segments.length + venues.length, SCAN_LIMIT_COUNT);
+                let processedItems = 0;
+                
                 for (const segment of segments) {
                     try {
                         if (!onScreen(segment)) continue;
                         if (count >= SCAN_LIMIT_COUNT) break;
+
+                        processedItems++;
+                        if (showLoader) {
+                            ProgressManager.update(processedItems, totalItems, 10); // Update every 10 items
+                        }
 
                         const roadType = getRoadType(segment);
                         if (!roadType) continue;
@@ -717,7 +832,6 @@
                     }
                 }
 
-
                 if (roadTypeConfig[POI_ID] && roadTypeConfig[POI_ID].scan) {
                     venues.forEach(venue => {
                         if (!onScreen(venue)) return;
@@ -725,6 +839,10 @@
                         if (hasPendingUR(venue.id)) return;
                         if (count >= SCAN_LIMIT_COUNT) return;
 
+                        processedItems++;
+                        if (showLoader) {
+                            ProgressManager.update(processedItems, totalItems, 10); // Update every 10 items
+                        }
 
                         const address = wmeSDK.DataModel.Venues.getAddress({ venueId: venue.id });
                         const cityID = address && address.street ? address.street.cityId : null;
@@ -794,8 +912,17 @@
                     cachedElements.relockAllbutton.setAttribute('disabled', true);
                     updateLockStatusIcon(false);
                 }
+
+                // Complete progress tracking for scanning
+                if (showLoader) {
+                    ProgressManager.complete();
+                }
             } catch (error) {
                 ErrorHandler.handle(error, 'Area Scanning', ErrorHandler.SEVERITY.WARNING);
+                // Complete progress tracking if an error occurs during scanning
+                if (showLoader) {
+                    ProgressManager.complete();
+                }
             }
         }, 'Area Scanning', ErrorHandler.SEVERITY.WARNING);
 
@@ -841,14 +968,12 @@
             const rulesCntr = document.createElement('div');
             const alertCntr = document.createElement('div');
             const hidebutton = document.createElement('div');
-            const dotscntr = document.createElement('div');
             const inputDiv1 = document.createElement('div');
             const inputDiv2 = document.createElement('div');
             const includeAllSegments = document.createElement('input');
             const includeAllSegmentsLabel = document.createElement('label');
             const respectRouting = document.createElement('input');
             const respectRoutingLabel = document.createElement('label');
-            const percentageLoader = document.createElement('div');
             const relockTabLabel = document.createTextNode('Re-lock Segments & POI');
             const lockStatusIcon = document.createElement('span');
             lockStatusIcon.id = 'lockcolor';
@@ -877,8 +1002,6 @@
                 localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
                 animateElement('sub', false, 'slow');
             };
-            dotscntr.className = 'fa fa-spinner fa-spin';
-            dotscntr.id = 'dotscntr';
             relockSubTitle.textContent = 'Results (limited to ' + SCAN_LIMIT_COUNT + ' per pass)';
             relockSubTitle.id = 'reshdr';
             rulesSubTitle.textContent = 'Active rules';
@@ -893,7 +1016,6 @@
             };
             cachedElements.relockAllbutton = relockAllbutton;
             cachedElements.lockColorElement = lockStatusIcon;
-            cachedElements.dotscntrElement = dotscntr;
 
             includeAllSegments.type = 'checkbox';
             includeAllSegments.name = "name";
@@ -1046,8 +1168,6 @@
             // add to stage
             relockContent.appendChild(relockTitle);
             relockContent.appendChild(versionTitle);
-            percentageLoader.id = 'percentageLoader';
-            cachedElements.percentageLoaderElement = percentageLoader;
             if (localStorage.getItem(ID_KEYS.MSG_HIDE) !== '1') {
                 relockSub.appendChild(hidebutton);
                 relockContent.appendChild(relockSub);
@@ -1070,12 +1190,13 @@
             relockContent.appendChild(relockSubTitle);
             relockContent.appendChild(resultsCntr);
             relockContent.appendChild(relockAllbutton);
-            relockContent.appendChild(dotscntr);
-            relockContent.appendChild(percentageLoader);
             relockContent.appendChild(rulesSubTitle);
             relockContent.appendChild(rulesCntr);
 
             tabPane.appendChild(relockContent);
+
+            // Initialize ProgressManager after UI elements are in the DOM
+            ProgressManager.init(relockContent);
 
 
             const eventHandlers = [];
@@ -1116,7 +1237,7 @@
                     if (window.relockTimer) {
                         clearTimeout(window.relockTimer);
                     }
-                    toggleProgressElements(false);
+                    ProgressManager.complete();
 
                     console.log(`${SCRIPT_LOG_PREFIX} Cleanup completed successfully`);
                 } catch (error) {
@@ -1144,23 +1265,14 @@
         async function relock(obj, key) {
             try {
                 const objects = obj[key];
-                let i = 0;
                 const total = objects.length;
 
-                // Get container width once instead of parsing CSS repeatedly
-                const container = document.getElementById('sidepanel-relockTab');
-                const containerWidth = container ? container.offsetWidth : 300;
-
-                // Update GUI progress
-                const updateProgress = () => {
-                    const progress = (i / total) * 100;
-                    const newWidth = (progress / 100) * containerWidth;
-
-                    toggleProgressElements(true, newWidth);
-                };
+                // Start progress tracking for individual relock operation
+                ProgressManager.start('relock');
 
                 // Process objects individually since SDK doesn't support batch actions
-                for (const feature of objects) {
+                for (let i = 0; i < total; i++) {
+                    const feature = objects[i];
                     try {
                         if (key === POI_NAME) {
                             await updateVenueLock(feature.object, feature.lockRank);
@@ -1168,11 +1280,11 @@
                             await updateSegmentLock(feature.object, feature.lockRank);
                         }
 
-                        i++;
-                        updateProgress();
+                        // Update progress
+                        ProgressManager.update(i + 1, total, 1); // Update every item for individual operations
 
                         // Small delay to prevent overwhelming the system
-                        if (i % 10 === 0) {
+                        if ((i + 1) % 10 === 0) {
                             await delay(100);
                         }
                     } catch (err) {
@@ -1181,27 +1293,26 @@
                     }
                 }
 
-                toggleProgressElements(false);
+                ProgressManager.complete();
             } catch (error) {
                 console.error(`${SCRIPT_LOG_PREFIX} Error in relock operation:`, error);
-                toggleProgressElements(false);
+                ProgressManager.complete();
             }
         }
 
         async function relockAll() {
             try {
-                toggleProgressElements(true);
-
-                // Get container width once for all progress calculations
-                const container = document.getElementById('sidepanel-relockTab');
-                const containerWidth = container ? container.offsetWidth : 300;
+                // Calculate total items across all types
+                const totalItems = Object.values(relockObject).reduce((sum, objects) => sum + objects.length, 0);
+                
+                // Start progress tracking for bulk relock operation
+                ProgressManager.start('relock-all');
+                
+                let processedItems = 0;
 
                 // Process each type of feature (segments, POIs, etc.)
                 for (const [key, objects] of Object.entries(relockObject)) {
                     if (objects.length === 0) continue;
-
-                    let processed = 0;
-                    const total = objects.length;
 
                     // Process objects individually
                     for (const feature of objects) {
@@ -1212,16 +1323,11 @@
                                 await updateSegmentLock(feature.object, feature.lockRank);
                             }
 
-                            processed++;
-
-                            // Update progress bar
-                            const progress = (processed / total) * 100;
-                            const newWidth = (progress / 100) * containerWidth;
-
-                            toggleProgressElements(true, newWidth);
+                            processedItems++;
+                            ProgressManager.update(processedItems, totalItems, 5); // Update every 5 items
 
                             // Small delay every 10 updates to prevent overwhelming the system
-                            if (processed % 10 === 0) {
+                            if (processedItems % 10 === 0) {
                                 await delay(100);
                             }
                         } catch (err) {
@@ -1231,12 +1337,12 @@
                     }
                 }
 
-                await scanArea();
+                await scanArea(false); // Don't show loader during relock operation
 
-                toggleProgressElements(false);
+                ProgressManager.complete();
             } catch (error) {
                 console.error(`${SCRIPT_LOG_PREFIX} Error in relockAll operation:`, error);
-                toggleProgressElements(false);
+                ProgressManager.complete();
             }
         }
 
