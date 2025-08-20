@@ -341,7 +341,9 @@
         let cachedElements = {
             relockAllbutton: null,
             lockColorElement: null,
-            checkboxElements: {} // Cache for road type checkboxes
+            checkboxElements: {}, // Cache for road type checkboxes
+            dotscntrElement: null, // Cache for progress loader
+            percentageLoaderElement: null // Cache for percentage display
         };
 
         /**
@@ -756,9 +758,11 @@
                             lockIconElement = document.createElement('div');
                             lockIconElement.className = 'fa fa-lock';
                             lockIconElement.className = 'fa fa-lock rl-lock-icon';
-                            lockIconElement.onclick = function () {
-                                relock(relockObject, key);
-                            };
+                            lockIconElement.onclick = (function(roadTypeKey) {
+                                return function() {
+                                    relock(relockObject, roadTypeKey);
+                                };
+                            })(key);
                             rightParentElement.insertBefore(lockIconElement, counterElement);
                         }
                     } else {
@@ -851,6 +855,7 @@
             };
             cachedElements.relockAllbutton = relockAllbutton;
             cachedElements.lockColorElement = lockStatusIcon;
+            cachedElements.dotscntrElement = dotscntr;
 
             includeAllSegments.type = 'checkbox';
             includeAllSegments.name = "name";
@@ -1003,6 +1008,7 @@
             relockContent.appendChild(relockTitle);
             relockContent.appendChild(versionTitle);
             percentageLoader.id = 'percentageLoader';
+            cachedElements.percentageLoaderElement = percentageLoader;
             if (localStorage.getItem(ID_KEYS.MSG_HIDE) !== '1') {
                 relockSub.appendChild(hidebutton);
                 relockContent.appendChild(relockSub);
@@ -1071,9 +1077,8 @@
                     if (window.relockTimer) {
                         clearTimeout(window.relockTimer);
                     }
-                    const loader = document.getElementById('dotscntr');
-                    if (loader) {
-                        loader.style.display = 'none';
+                    if (cachedElements.dotscntrElement) {
+                        cachedElements.dotscntrElement.style.display = 'none';
                     }
 
                     console.log(`${SCRIPT_LOG_PREFIX} Cleanup completed successfully`);
@@ -1100,9 +1105,6 @@
         }
 
         async function relock(obj, key) {
-            let dotscntrElement;
-            let percentageLoaderElement;
-
             try {
                 const objects = obj[key];
                 let i = 0;
@@ -1116,15 +1118,13 @@
                 const updateProgress = () => {
                     const progress = (i / total) * 100;
                     const newWidth = (progress / 100) * containerWidth;
-                    percentageLoaderElement = document.getElementById('percentageLoader');
-                    dotscntrElement = document.getElementById('dotscntr');
 
-                    if (percentageLoaderElement) {
-                        percentageLoaderElement.style.display = 'block';
-                        percentageLoaderElement.style.width = newWidth + 'px';
+                    if (cachedElements.percentageLoaderElement) {
+                        cachedElements.percentageLoaderElement.style.display = 'block';
+                        cachedElements.percentageLoaderElement.style.width = newWidth + 'px';
                     }
-                    if (dotscntrElement) {
-                        dotscntrElement.style.display = 'inline-block';
+                    if (cachedElements.dotscntrElement) {
+                        cachedElements.dotscntrElement.style.display = 'inline-block';
                     }
                 };
 
@@ -1150,37 +1150,27 @@
                     }
                 }
 
-                dotscntrElement = document.getElementById('dotscntr');
-                percentageLoaderElement = document.getElementById('percentageLoader');
-
-                if (dotscntrElement) {
-                    dotscntrElement.style.display = 'none';
+                if (cachedElements.dotscntrElement) {
+                    cachedElements.dotscntrElement.style.display = 'none';
                 }
-                if (percentageLoaderElement) {
-                    percentageLoaderElement.style.display = 'none';
+                if (cachedElements.percentageLoaderElement) {
+                    cachedElements.percentageLoaderElement.style.display = 'none';
                 }
             } catch (error) {
                 console.error(`${SCRIPT_LOG_PREFIX} Error in relock operation:`, error);
-                dotscntrElement = document.getElementById('dotscntr');
-                percentageLoaderElement = document.getElementById('percentageLoader');
-
-                if (dotscntrElement) {
-                    dotscntrElement.style.display = 'none';
+                if (cachedElements.dotscntrElement) {
+                    cachedElements.dotscntrElement.style.display = 'none';
                 }
-                if (percentageLoaderElement) {
-                    percentageLoaderElement.style.display = 'none';
+                if (cachedElements.percentageLoaderElement) {
+                    cachedElements.percentageLoaderElement.style.display = 'none';
                 }
             }
         }
 
         async function relockAll() {
-            let dotscntrElement;
-            let percentageLoaderElement;
-
             try {
-                dotscntrElement = document.getElementById('dotscntr');
-                if (dotscntrElement) {
-                    dotscntrElement.style.display = 'inline-block';
+                if (cachedElements.dotscntrElement) {
+                    cachedElements.dotscntrElement.style.display = 'inline-block';
                 }
 
                 // Get container width once for all progress calculations
@@ -1208,11 +1198,10 @@
                             // Update progress bar
                             const progress = (processed / total) * 100;
                             const newWidth = (progress / 100) * containerWidth;
-                            percentageLoaderElement = document.getElementById('percentageLoader');
 
-                            if (percentageLoaderElement) {
-                                percentageLoaderElement.style.display = 'block';
-                                percentageLoaderElement.style.width = newWidth + 'px';
+                            if (cachedElements.percentageLoaderElement) {
+                                cachedElements.percentageLoaderElement.style.display = 'block';
+                                cachedElements.percentageLoaderElement.style.width = newWidth + 'px';
                             }
 
                             // Small delay every 10 updates to prevent overwhelming the system
@@ -1228,25 +1217,19 @@
 
                 await scanArea();
 
-                dotscntrElement = document.getElementById('dotscntr');
-                percentageLoaderElement = document.getElementById('percentageLoader');
-
-                if (dotscntrElement) {
-                    animateElement(dotscntrElement, false, 'normal');
+                if (cachedElements.dotscntrElement) {
+                    animateElement(cachedElements.dotscntrElement, false, 'normal');
                 }
-                if (percentageLoaderElement) {
-                    percentageLoaderElement.style.display = 'none';
+                if (cachedElements.percentageLoaderElement) {
+                    cachedElements.percentageLoaderElement.style.display = 'none';
                 }
             } catch (error) {
                 console.error(`${SCRIPT_LOG_PREFIX} Error in relockAll operation:`, error);
-                dotscntrElement = document.getElementById('dotscntr');
-                percentageLoaderElement = document.getElementById('percentageLoader');
-
-                if (dotscntrElement) {
-                    animateElement(dotscntrElement, false, 'normal');
+                if (cachedElements.dotscntrElement) {
+                    animateElement(cachedElements.dotscntrElement, false, 'normal');
                 }
-                if (percentageLoaderElement) {
-                    percentageLoaderElement.style.display = 'none';
+                if (cachedElements.percentageLoaderElement) {
+                    cachedElements.percentageLoaderElement.style.display = 'none';
                 }
             }
         }
