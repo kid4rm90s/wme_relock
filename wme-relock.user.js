@@ -654,15 +654,9 @@
                 }
 
                 hideInactiveCities();
-                // Clear existing arrays instead of recreating for better memory efficiency
-                Object.values(roadTypeConfig).forEach(function (street) {
-                    if (street.sdkType) {
-                        if (!relockObject[street.sdkType]) {
-                            relockObject[street.sdkType] = [];
-                        } else {
-                            relockObject[street.sdkType].length = 0; // Clear existing array
-                        }
-                    }
+                // Clear all relock arrays for fresh scan
+                Object.keys(relockObject).forEach(key => {
+                    relockObject[key].length = 0;
                 });
 
                 let foundBadlocks = false;
@@ -706,6 +700,9 @@
 
                         // Check if segment needs lock adjustment using centralized logic
                         if (needsLockAdjustment(segment, desiredLockLevel)) {
+                            if (!relockObject[curStreet.sdkType]) {
+                                relockObject[curStreet.sdkType] = [];
+                            }
                             relockObject[curStreet.sdkType].push({
                                 object: segment,
                                 lockRank: desiredLockLevel
@@ -738,6 +735,9 @@
 
                         // Check if venue needs lock adjustment using centralized logic
                         if (needsLockAdjustment(venue, desiredLockLevel)) {
+                            if (!relockObject[POI_NAME]) {
+                                relockObject[POI_NAME] = [];
+                            }
                             relockObject[POI_NAME].push({
                                 object: venue,
                                 lockRank: desiredLockLevel
@@ -853,10 +853,22 @@
             lockStatusIcon.id = 'lockcolor';
             lockStatusIcon.className = 'fa fa-lock rl-lock-status-ok';
 
-            tabLabel.innerHTML = "Re-";
+            tabLabel.textContent = "Re-";
             tabLabel.appendChild(lockStatusIcon);
             relockTitle.appendChild(relockTabLabel);
-            relockSub.innerHTML = 'Your on-screen area is automatically scanned when you load or pan around. Pressing the lock behind each type will relock only those results, or you can choose to relock all.<br/><br/>You can only relock segments lower or equal to your current editor level. Segments locked higher than normal are left alone.';
+            
+            // Create description content using proper paragraph elements
+            const paragraph1 = document.createElement('p');
+            paragraph1.textContent = 'Your on-screen area is automatically scanned when you load or pan around. Pressing the lock behind each type will relock only those results, or you can choose to relock all.';
+            paragraph1.style.marginBottom = '10px';
+            
+            const paragraph2 = document.createElement('p');
+            paragraph2.textContent = 'You can only relock segments lower or equal to your current editor level. Segments locked higher than normal are left alone.';
+            paragraph2.style.marginBottom = '0';
+            
+            relockSub.appendChild(paragraph1);
+            relockSub.appendChild(paragraph2);
+            
             relockSub.className = 'rl-info-box';
             relockSub.id = 'sub';
             hidebutton.style.cssText = 'cursor:pointer;width:16px;height:16px;position:absolute;right:3px;top:3px;background-image:url(\'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAAAWdEVYdENyZWF0aW9uIFRpbWUAMTEvMjAvMTVnsXrkAAADTUlEQVQ4jW2TW0xbZQCAv3ODnpYWegEGo1wKwzBcxAs6dONSjGMm3kjmnBqjYqLREE2WLDFTIBmbmmxRpzHy4NPi4zRLfNBlZjjtnCEaOwYDJUDcVqC3UzpWTkt7fp80hvk9f/nePkkIwWb+gA5jMXLQjK50Zc2cuKVp4wlX2UevtAYubnal/waWoTI1N38keu7ck2uTl335ZFJCkpE8XlGob4ibgeZvMl7P8MtdO6/dFohDe/Sn0LdzJ457MuHfUYqLkYtsSIqMJASyIiNv30Gm6+G1zNbqvpf6gqF/AwaUXx+/MDdz6KArH4ujVVRAbgPVroMsQz6P6nJiGUnUGj/pR/tTyx2dtW+11t2UAa5Pz34w//GHLitpsG1wkODp0xQ11GOZJpgmzq5uqo8ew76zAxFPUDJxscwzFR4BkGfh/tj58/3Zq9OoFZU0PHsAd00NnWNj6IEApd3duA48g2nXKenpQSl1oceWsUeuPfdp+M9GZf/zA5+lz3x9lxRbAUli+dIlKnt7Ud1uCk1NJH0+VnMmq6EQfw0NUzCSULBQfT4HVf4iNRO50VlIGSi6jup0sj5zlTO7d9N48iRLa2vkCwWsyTArbx/GAaSBm/MLyLm85OjZs0c2zawQsoRmt5NeXCRyeRLh9rBkGBSEwF6i09h+L96GemyAx2bDK4ENkGRJkbM2fVy4PRhT08RmZvH09VE29C6ixEFuahL3hklLby9PhEKUt7VRZln4kHD669Bqtl6Q7W07jqWL9FQiEkHTdUoGBsgXF5EPh0m8M8Tc62/CSoLSqmqaR4ZxaRpenxfbgw8lCy2Nx5Uv3xuNXEll7shO/HI38Rjr09NImkriyCgOy0JZTZM4+x3C7SY+epTaLZWsdwXJPNV/6jF/9ReSEIKzmcKWpbHPF9OHDxUr6xksoAiQJAmnpuEWAqeq4G9uRr7nPpZeeDG10NqybV+5Ly4DPGJXlsv79u51v38iK22/EwmwACEEIpdD2tjApmncan8A49XX4qtNgeC+cl/8tpm+jxoBY+K3N7I/jj+dvxKuIhZV7KpKWV295dy1K6YEg1/NO2wj+/210f+98R9+hub0wo1BOZnslRVV16orf0hVeD55HH7d7P4N0V1gY9/zcaEAAAAASUVORK5CYII=\');';
@@ -866,10 +878,10 @@
             };
             dotscntr.style.backgroundImage = `url("${LOADER_GIF}")`;
             dotscntr.id = 'dotscntr';
-            relockSubTitle.innerHTML = 'Results (limited to ' + SCAN_LIMIT_COUNT + ' per pass)';
+            relockSubTitle.textContent = 'Results (limited to ' + SCAN_LIMIT_COUNT + ' per pass)';
             relockSubTitle.id = 'reshdr';
-            rulesSubTitle.innerHTML = 'Active rules';
-            versionTitle.innerHTML = 'Version ' + SCRIPT_VERSION;
+            rulesSubTitle.textContent = 'Active rules';
+            versionTitle.textContent = 'Version ' + SCRIPT_VERSION;
 
             relockAllbutton.id = 'rlkall';
             relockAllbutton.color = 'primary';
@@ -893,7 +905,7 @@
                 relockShowAlert();
             };
             includeAllSegmentsLabel.htmlFor = ID_KEYS.ALL_SEGMENTS;
-            includeAllSegmentsLabel.innerHTML = 'Also relock higher locked objects';
+            includeAllSegmentsLabel.textContent = 'Also relock higher locked objects';
             includeAllSegmentsLabel.className = 'rl-label';
 
             // Respect routing road type
@@ -909,7 +921,7 @@
                 scanArea(); // No parameters needed
             };
             respectRoutingLabel.htmlFor = ID_KEYS.RESPECT_ROUTING;
-            respectRoutingLabel.innerHTML = 'Respect routing road type';
+            respectRoutingLabel.textContent = 'Respect routing road type';
             respectRoutingLabel.className = 'rl-label';
 
             resultsCntr.className = 'rl-container';
@@ -940,7 +952,7 @@
                 
                 // Cache checkbox element for performance
                 cachedElements.checkboxElements[value.sdkType] = checkboxElement;
-                labelElement.innerHTML = value.typeName;
+                labelElement.textContent = value.typeName;
                 labelElement.title = value.typeName;
 
                 leftKeyContainer.appendChild(checkboxElement);
@@ -959,7 +971,7 @@
             });
             alertCntr.id = "alertCntr";
             alertCntr.className = 'rl-alert-box';
-            alertCntr.innerHTML = 'Watch out for map exceptions, some higher locks are there for a reason!';
+            alertCntr.textContent = 'Watch out for map exceptions, some higher locks are there for a reason!';
             let rowElm;
             let colElm;
 
@@ -987,7 +999,7 @@
                     colElm = document.createElement('td');
                     colElm.className = "tg-header";
                     const cityName = parseInt(key) === 0 ? countryRules.CountryName : value.CityName;
-                    colElm.innerHTML = cityName;
+                    colElm.textContent = cityName;
                     colElm.colSpan = 6;
                     rowElm.appendChild(colElm);
                     tableElm.appendChild(rowElm);
@@ -1004,13 +1016,13 @@
                                 colElm.className = "tg-type";
 
                                 const streetType = getTypeNameBySdkType(k) || k;
-                                colElm.innerHTML = streetType;
+                                colElm.textContent = streetType;
                                 colElm.title = streetType;
                                 rowElm.appendChild(colElm);
 
                                 colElm = document.createElement('td');
                                 colElm.className = "tg-value";
-                                colElm.innerHTML = v;
+                                colElm.textContent = v;
                                 rowElm.appendChild(colElm);
 
                                 colIndex++;
