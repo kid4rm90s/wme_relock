@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.19.001
+// @version      2025.08.20.001
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -13,8 +13,8 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAA+VBMVEX///93PgHX19fTgQfFZgLLcwTrxYDDgA3nqBj5+fmwr6+Yl5f8/PzExMTl5eX114vv7+/e3t68vLzOzs6saRKARQSLTgeioqK2tbX72XfU1NT515fxz4b54b3RmySYWAv31aTpwIHgrn9/f3/75qPZsEvuuC/utx3psVP13KizbhXuuVj745bfoEzzwzDxwDXTjknpxqDPfhzWih7PhUaObErowqDJchrmqCfprRjbmUvblCLZjAv71WnhnyTfmA7hrmbjsm7qxpPv06vYljj305776MvLkD3XkjFwcHCMi4v6zk/6z1P2wVDYqzr3y3j2xWnrrl761X3u0VhGAAABv0lEQVQ4jZWTXXuaMBiGY7bZQUhIoBaKsIK0KkVqtd+2tJ2gnVJs9f//mAW78uHYwe6TXE+em/flJAD8D0RVdF3HTKqvGcaMAiAQVYd1vaEASikhhFKA1ZoeA8Iwct2lCAnAxl/zdcAMbeGipbtwMQM62xFEFUJtoWEIsbh0CVTF3QGqqrjax2cq4kkkFQFjTJD2eYeXBoa4uoEoBOU/RhBUWHWHJukUCZ9JQFCnWkVAQJRQniREyvGPANA/YzazRhBKwjSOg+DZmdoRZ+r8XAfxr5eo1AfzuW1HljXfYkX2zJ5b8TQXXtbWzPff38x2hvn27qf+zFrHubC39tppGoabjczZHIZpmra9/jgXTn2vnSTJaxgecsLwNRkmsueflgV5eLZarU4y+Lk6G9YIg8HxB4PBYEfY3woZQ0529rjQ3y+Evid3ez9K9LpmWTjqe2b3Ti5xlwlHhRDYzdvvFW5NOyiEAy48Pu2VeHps2sFBIUwi5/6hWeLh3okmhdCajJyLLxUunNGktS0lgdLW+agz/lZh3Bmdt6ggZS/NUBqX152brxVuOteXDZVRafsUrxq1XGHIBb6CwHoY4Tt+A1eiQ8S/AAv7AAAAAElFTkSuQmCC
-// @downloadURL https://update.greasyfork.org/scripts/457554/wme-relock.user.js
-// @updateURL https://update.greasyfork.org/scripts/457554/wme-relock.meta.js
+// @downloadURL  https://update.greasyfork.org/scripts/457554/wme-relock.user.js
+// @updateURL    https://update.greasyfork.org/scripts/457554/wme-relock.meta.js
 // ==/UserScript==
 
 /* jshint esversion: 11 */
@@ -34,12 +34,41 @@
     };
 
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const SCRIPT_VERSION = GM_info.script.version;
+    const SCRIPT_LOG_PREFIX = 'Relock:';
     const SCAN_LIMIT_COUNT = 150;
     const POI_ID = "90000"; // Fake ID for POI to not conflict with real street IDs
     const POI_NAME = "POI";
 
     let wmeSDK;
     let userLevel; // Cache user level to avoid repeated SDK calls
+    const minimumUserLevelForHigherLocks = 4;
+
+    const LOADER_GIF = 'data:image/gif;base64,R0lGODlhEAAQAPQAAP///wAAAPj4+Dg4OISEhAYGBiYmJtbW1qioqBYWFnZ2dmZmZuTk5JiYmMbGxkhISFZWVgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH+GkNyZWF0ZWQgd2l0aCBhamF4bG9hZC5pbmZvACH5BAAKAAAAIf8LTkVUU0NBUEUyLjADAQAAACwAAAAAEAAQAAAFUCAgjmRpnqUwFGwhKoRgqq2YFMaRGjWA8AbZiIBbjQQ8AmmFUJEQhQGJhaKOrCksgEla+KIkYvC6SJKQOISoNSYdeIk1ayA8ExTyeR3F749CACH5BAAKAAEALAAAAAAQABAAAAVoICCKR9KMaCoaxeCoqEAkRX3AwMHWxQIIjJSAZWgUEgzBwCBAEQpMwIDwY1FHgwJCtOW2UDWYIDyqNVVkUbYr6CK+o2eUMKgWrqKhj0FrEM8jQQALPFA3MAc8CQSAMA5ZBjgqDQmHIyEAIfkEAAoAAgAsAAAAABAAEAAABWAgII4j85Ao2hRIKgrEUBQJLaSHMe8zgQo6Q8sxS7RIhILhBkgumCTZsXkACBC+0cwF2GoLLoFXREDcDlkAojBICRaFLDCOQtQKjmsQSubtDFU/NXcDBHwkaw1cKQ8MiyEAIfkEAAoAAwAsAAAAABAAEAAABVIgII5kaZ6AIJQCMRTFQKiDQx4GrBfGa4uCnAEhQuRgPwCBtwK+kCNFgjh6QlFYgGO7baJ2CxIioSDpwqNggWCGDVVGphly3BkOpXDrKfNm/4AhACH5BAAKAAQALAAAAAAQABAAAAVgICCOZGmeqEAMRTEQwskYbV0Yx7kYSIzQhtgoBxCKBDQCIOcoLBimRiFhSABYU5gIgW01pLUBYkRItAYAqrlhYiwKjiWAcDMWY8QjsCf4DewiBzQ2N1AmKlgvgCiMjSQhACH5BAAKAAUALAAAAAAQABAAAAVfICCOZGmeqEgUxUAIpkA0AMKyxkEiSZEIsJqhYAg+boUFSTAkiBiNHks3sg1ILAfBiS10gyqCg0UaFBCkwy3RYKiIYMAC+RAxiQgYsJdAjw5DN2gILzEEZgVcKYuMJiEAOwAAAAAAAAAAAA==';
+    const REQUEST_TIMEOUT = 20000; // in ms
+    const RULES_HASH = "AKfycbyBy5e4J1u3RbRK4cNWbUJ-sDL2aLDUIMH1glbf6xOEEMO0Z4wl2wTKIRw0HP5KDbwR6A";
+
+    // Default lock levels
+    const DEFAULT_STREET_LOCKS = {
+        STREET: 1,
+        PRIMARY_STREET: 1,
+        MINOR_HIGHWAY: 2,
+        MAJOR_HIGHWAY: 3,
+        RAMP: 4,
+        FREEWAY: 4,
+        POI: 1,
+        RAILROAD: 1,
+        PRIVATE_ROAD: 1,
+        PARKING_LOT_ROAD: 1,
+        OFF_ROAD: 1,
+        ALLEY: 1,
+        PEDESTRIAN_BOARDWALK: 1,
+        WALKING_TRAIL: 1,
+        STAIRWAY: 1,
+        WALKWAY: 1,
+        FERRY: 1,
+        RUNWAY_TAXIWAY: 1
+    };
 
     const ErrorHandler = {
         SEVERITY: {
@@ -57,10 +86,8 @@
          * @param {Object} additionalInfo - Additional context information
          */
         handle(error, context = 'Unknown', severity = this.SEVERITY.ERROR, additionalInfo = {}) {
-            const prefix = 'Relock:';
             const errorMsg = error instanceof Error ? error.message : String(error);
-            const fullMessage = `${prefix} [${context}] ${errorMsg}`;
-
+            const fullMessage = `${SCRIPT_LOG_PREFIX} [${context}] ${errorMsg}`;
 
             switch (severity) {
                 case this.SEVERITY.CRITICAL:
@@ -81,7 +108,7 @@
 
 
             if (severity === this.SEVERITY.CRITICAL) {
-                const userMessage = `${prefix} Critical Error in ${context}\n${errorMsg}\n\nScript may not function properly.`;
+                const userMessage = `${SCRIPT_LOG_PREFIX} Critical Error in ${context}\n${errorMsg}\n\nScript may not function properly.`;
                 alert(userMessage);
             }
 
@@ -182,7 +209,6 @@
                     scriptName: GM_info.script.name
                 });
 
-
                 const requiredComponents = [
                     'DataModel',
                     'Events',
@@ -209,7 +235,7 @@
                     throw new Error('Unable to get user info');
                 }
                 userLevel = userInfo.rank + 1;
-                console.debug('Relock: Cached user level:', userLevel);
+                console.debug(`${SCRIPT_LOG_PREFIX} Cached user level:`, userLevel);
 
                 await wmeSDK.Events.once({ eventName: "wme-map-data-loaded" });
                 await Relock_init();
@@ -289,33 +315,14 @@
             return;
         }
 
-        const VERSION = GM_info.script.version;
-        const loader = 'data:image/gif;base64,R0lGODlhEAAQAPQAAP///wAAAPj4+Dg4OISEhAYGBiYmJtbW1qioqBYWFnZ2dmZmZuTk5JiYmMbGxkhISFZWVgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH+GkNyZWF0ZWQgd2l0aCBhamF4bG9hZC5pbmZvACH5BAAKAAAAIf8LTkVUU0NBUEUyLjADAQAAACwAAAAAEAAQAAAFUCAgjmRpnqUwFGwhKoRgqq2YFMaRGjWA8AbZiIBbjQQ8AmmFUJEQhQGJhaKOrCksgEla+KIkYvC6SJKQOISoNSYdeIk1ayA8ExTyeR3F749CACH5BAAKAAEALAAAAAAQABAAAAVoICCKR9KMaCoaxeCoqEAkRX3AwMHWxQIIjJSAZWgUEgzBwCBAEQpMwIDwY1FHgwJCtOW2UDWYIDyqNVVkUbYr6CK+o2eUMKgWrqKhj0FrEM8jQQALPFA3MAc8CQSAMA5ZBjgqDQmHIyEAIfkEAAoAAgAsAAAAABAAEAAABWAgII4j85Ao2hRIKgrEUBQJLaSHMe8zgQo6Q8sxS7RIhILhBkgumCTZsXkACBC+0cwF2GoLLoFXREDcDlkAojBICRaFLDCOQtQKjmsQSubtDFU/NXcDBHwkaw1cKQ8MiyEAIfkEAAoAAwAsAAAAABAAEAAABVIgII5kaZ6AIJQCMRTFQKiDQx4GrBfGa4uCnAEhQuRgPwCBtwK+kCNFgjh6QlFYgGO7baJ2CxIioSDpwqNggWCGDVVGphly3BkOpXDrKfNm/4AhACH5BAAKAAQALAAAAAAQABAAAAVgICCOZGmeqEAMRTEQwskYbV0Yx7kYSIzQhtgoBxCKBDQCIOcoLBimRiFhSABYU5gIgW01pLUBYkRItAYAqrlhYiwKjiWAcDMWY8QjsCf4DewiBzQ2N1AmKlgvgCiMjSQhACH5BAAKAAUALAAAAAAQABAAAAVfICCOZGmeqEgUxUAIpkA0AMKyxkEiSZEIsJqhYAg+boUFSTAkiBiNHks3sg1ILAfBiS10gyqCg0UaFBCkwy3RYKiIYMAC+RAxiQgYsJdAjw5DN2gILzEEZgVcKYuMJiEAOwAAAAAAAAAAAA==';
-
-        // Default lock levels
-        const defaultLocks = {
-            STREET: 1,
-            PRIMARY_STREET: 1,
-            MINOR_HIGHWAY: 2,
-            MAJOR_HIGHWAY: 3,
-            RAMP: 4,
-            FREEWAY: 4,
-            POI: 1,
-            RAILROAD: 1,
-            PRIVATE_ROAD: 1,
-            PARKING_LOT_ROAD: 1,
-            OFF_ROAD: 1,
-            ALLEY: 1,
-            PEDESTRIAN_BOARDWALK: 1,
-            WALKING_TRAIL: 1,
-            STAIRWAY: 1,
-            WALKWAY: 1,
-            FERRY: 1,
-            RUNWAY_TAXIWAY: 1
-        };
-
         // Get road types dynamically from SDK instead of hardcoded mapping
         let roadTypeConfig = {};
+        let rulesDB = {};
+        let relockObject = {};
+        let isScanInProgress = false;
+        let cachedElements = {
+            relockAllbutton: null
+        };
 
         /**
          * Initialize road types from SDK
@@ -342,7 +349,7 @@
                     sdkType: POI_NAME
                 };
 
-                console.log('Relock: Initialized', Object.keys(streetTypesMap).length, 'road types from SDK');
+                console.log(`${SCRIPT_LOG_PREFIX} Initialized`, Object.keys(streetTypesMap).length, 'road types from SDK');
                 return streetTypesMap;
             }, 'Road Types Initialization', ErrorHandler.SEVERITY.CRITICAL)(); // Critical error if this fails
         }
@@ -358,11 +365,6 @@
                 return roadType ? roadType.typeName : "";
             }, 'Type Name Lookup', ErrorHandler.SEVERITY.WARNING)();
         }
-
-        const requestsTimeout = 20000; // in ms
-        const rulesHash = "AKfycbyBy5e4J1u3RbRK4cNWbUJ-sDL2aLDUIMH1glbf6xOEEMO0Z4wl2wTKIRw0HP5KDbwR6A";
-        let rulesDB = {};
-        let relockObject = {};
 
         function onScreen(obj) {
             if (!obj || !obj.geometry) return false;
@@ -496,16 +498,16 @@
 
             return ErrorHandler.wrapSync(() => {
                 const includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
-                const allSegmentsInclude = includeAllSegments && includeAllSegments.checked && userLevel > 4;
-                
+                const allSegmentsInclude = includeAllSegments && includeAllSegments.checked && userLevel > minimumUserLevelForHigherLocks;
+
                 // Check if user has permission to modify this lock level
                 if (userLevel <= targetLockLevel) {
                     return false;
                 }
-                
+
                 // Object needs adjustment if lock is too low OR (if enabled) too high
-                return (obj.lockRank < targetLockLevel) || 
-                       (obj.lockRank > targetLockLevel && allSegmentsInclude);
+                return (obj.lockRank < targetLockLevel) ||
+                    (obj.lockRank > targetLockLevel && allSegmentsInclude);
             }, 'Lock Adjustment Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
@@ -530,7 +532,7 @@
                 GM_xmlhttpRequest({
                     url: url,
                     method: 'GET',
-                    timeout: requestsTimeout,
+                    timeout: REQUEST_TIMEOUT,
                     onload: function (res) {
                         resolve(res);
                     },
@@ -586,7 +588,7 @@
 
         async function getAllLockRules() {
             try {
-                const url = `https://script.google.com/macros/s/${rulesHash}/exec?func=getAllLockRulesV2`;
+                const url = `https://script.google.com/macros/s/${RULES_HASH}/exec?func=getAllLockRulesV2`;
                 const response = await sendHTTPRequest(url);
 
                 if (!validateHTTPResponse(response)) {
@@ -604,14 +606,9 @@
             }
         }
 
-        let isScanInProgress = false;
-        let cachedElements = {
-            relockAllbutton: null
-        };
-
         const scanArea = ErrorHandler.wrapAsync(async () => {
             if (isScanInProgress) {
-                console.debug('Relock: Scan already in progress, skipping...');
+                console.debug(`${SCRIPT_LOG_PREFIX} Scan already in progress, skipping...`);
                 return;
             }
 
@@ -639,8 +636,8 @@
                 let foundBadlocks = false;
                 let respectRoutingRoadType = respectRouting.checked;
                 let count = 0;
-                let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : defaultLocks;
-                console.debug("Relock: Rules to be used", ABBR);
+                let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : DEFAULT_STREET_LOCKS;
+                console.debug(`${SCRIPT_LOG_PREFIX} Rules to be used`, ABBR);
                 Object.entries(roadTypeConfig).forEach(([key, value]) => {
                     let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType + ID_KEYS.ELM_CHK;
                     let chk = document.getElementById(idPrefix);
@@ -676,7 +673,7 @@
                                 cityID = street ? street.cityId : null;
                             }
                         } catch (err) {
-                            console.warn('Relock: Could not get street info for segment:', segment.id);
+                            console.warn(`${SCRIPT_LOG_PREFIX} Could not get street info for segment:`, segment.id);
                         }
 
                         const cityRules = cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID];
@@ -693,7 +690,7 @@
                             count++;
                         }
                     } catch (segmentError) {
-                        console.error('Relock: Error processing segment:', segmentError);
+                        console.error(`${SCRIPT_LOG_PREFIX} Error processing segment:`, segmentError);
                         continue;
                     }
                 }
@@ -744,7 +741,7 @@
 
                     if (value.length !== 0) {
                         counterElement.textContent = value.length;
-                        
+
                         if (!lockIconElement) {
                             lockIconElement = document.createElement('div');
                             lockIconElement.className = 'fa fa-lock';
@@ -784,9 +781,9 @@
          */
         function updateLockStatusIcon(element, hasErrors) {
             if (!element) return;
-            
-            element.className = hasErrors 
-                ? 'fa fa-lock rl-lock-status-error' 
+
+            element.className = hasErrors
+                ? 'fa fa-lock rl-lock-status-error'
                 : 'fa fa-lock rl-lock-status-ok';
         }
 
@@ -818,7 +815,7 @@
             const lockStatusIcon = document.createElement('span');
             lockStatusIcon.id = 'lockcolor';
             lockStatusIcon.className = 'fa fa-lock rl-lock-status-ok';
-            
+
             tabLabel.innerHTML = "Re-";
             tabLabel.appendChild(lockStatusIcon);
             relockTitle.appendChild(relockTabLabel);
@@ -830,12 +827,12 @@
                 localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
                 animateElement('sub', false, 'slow');
             };
-            dotscntr.style.backgroundImage = `url("${loader}")`;
+            dotscntr.style.backgroundImage = `url("${LOADER_GIF}")`;
             dotscntr.id = 'dotscntr';
             relockSubTitle.innerHTML = 'Results (limited to ' + SCAN_LIMIT_COUNT + ' per pass)';
             relockSubTitle.id = 'reshdr';
             rulesSubTitle.innerHTML = 'Active rules';
-            versionTitle.innerHTML = 'Version ' + VERSION;
+            versionTitle.innerHTML = 'Version ' + SCRIPT_VERSION;
 
             relockAllbutton.id = 'rlkall';
             relockAllbutton.color = 'primary';
@@ -845,7 +842,7 @@
                 relockAll();
             };
             cachedElements.relockAllbutton = relockAllbutton;
-            
+
             includeAllSegments.type = 'checkbox';
             includeAllSegments.name = "name";
             includeAllSegments.value = "value";
@@ -935,7 +932,7 @@
                     rowElm = document.createElement('tr');
                     rowElm.className = "tg-row";
                     rowElm.dataset.name = parseInt(key) === 0 ? 'country' : value.CityName;
-                    
+
                     colElm = document.createElement('td');
                     colElm.className = "tg-header";
                     const cityName = parseInt(key) === 0 ? countryRules.CountryName : value.CityName;
@@ -996,6 +993,12 @@
             inputDiv1.appendChild(respectRoutingLabel);
             inputDiv2.appendChild(includeAllSegments);
             inputDiv2.appendChild(includeAllSegmentsLabel);
+            
+            // Hide the "Also relock higher locked objects" option if user level is too low
+            if (userLevel < minimumUserLevelForHigherLocks) {
+                inputDiv2.style.display = 'none';
+            }
+            
             relockContent.appendChild(inputDiv1);
             relockContent.appendChild(inputDiv2);
 
@@ -1032,7 +1035,7 @@
                     try {
                         handler.remove();
                     } catch (err) {
-                        console.error('Relock: Error removing event handler:', err);
+                        console.error(`${SCRIPT_LOG_PREFIX} Error removing event handler:`, err);
                     }
                 });
                 eventHandlers.length = 0;
@@ -1054,9 +1057,9 @@
                         loader.style.display = 'none';
                     }
 
-                    console.log('Relock: Cleanup completed successfully');
+                    console.log(`${SCRIPT_LOG_PREFIX} Cleanup completed successfully`);
                 } catch (error) {
-                    console.error('Relock: Error during cleanup:', error);
+                    console.error(`${SCRIPT_LOG_PREFIX} Error during cleanup:`, error);
                 }
             };
 
@@ -1080,7 +1083,7 @@
         async function relock(obj, key) {
             let dotscntrElement;
             let percentageLoaderElement;
-            
+
             try {
                 const objects = obj[key];
                 let i = 0;
@@ -1096,7 +1099,7 @@
                     const newWidth = (progress / 100) * containerWidth;
                     percentageLoaderElement = document.getElementById('percentageLoader');
                     dotscntrElement = document.getElementById('dotscntr');
-                    
+
                     if (percentageLoaderElement) {
                         percentageLoaderElement.style.display = 'block';
                         percentageLoaderElement.style.width = newWidth + 'px';
@@ -1123,14 +1126,14 @@
                             await delay(100);
                         }
                     } catch (err) {
-                        console.error('Relock: Error updating feature:', err);
+                        console.error(`${SCRIPT_LOG_PREFIX} Error updating feature:`, err);
                         continue;
                     }
                 }
 
                 dotscntrElement = document.getElementById('dotscntr');
                 percentageLoaderElement = document.getElementById('percentageLoader');
-                
+
                 if (dotscntrElement) {
                     dotscntrElement.style.display = 'none';
                 }
@@ -1138,10 +1141,10 @@
                     percentageLoaderElement.style.display = 'none';
                 }
             } catch (error) {
-                console.error('Relock: Error in relock operation:', error);
+                console.error(`${SCRIPT_LOG_PREFIX} Error in relock operation:`, error);
                 dotscntrElement = document.getElementById('dotscntr');
                 percentageLoaderElement = document.getElementById('percentageLoader');
-                
+
                 if (dotscntrElement) {
                     dotscntrElement.style.display = 'none';
                 }
@@ -1154,7 +1157,7 @@
         async function relockAll() {
             let dotscntrElement;
             let percentageLoaderElement;
-            
+
             try {
                 dotscntrElement = document.getElementById('dotscntr');
                 if (dotscntrElement) {
@@ -1187,7 +1190,7 @@
                             const progress = (processed / total) * 100;
                             const newWidth = (progress / 100) * containerWidth;
                             percentageLoaderElement = document.getElementById('percentageLoader');
-                            
+
                             if (percentageLoaderElement) {
                                 percentageLoaderElement.style.display = 'block';
                                 percentageLoaderElement.style.width = newWidth + 'px';
@@ -1198,7 +1201,7 @@
                                 await delay(100);
                             }
                         } catch (err) {
-                            console.error('Relock: Error updating feature:', err);
+                            console.error(`${SCRIPT_LOG_PREFIX} Error updating feature:`, err);
                             continue;
                         }
                     }
@@ -1208,7 +1211,7 @@
 
                 dotscntrElement = document.getElementById('dotscntr');
                 percentageLoaderElement = document.getElementById('percentageLoader');
-                
+
                 if (dotscntrElement) {
                     animateElement(dotscntrElement, false, 'normal');
                 }
@@ -1216,10 +1219,10 @@
                     percentageLoaderElement.style.display = 'none';
                 }
             } catch (error) {
-                console.error('Relock: Error in relockAll operation:', error);
+                console.error(`${SCRIPT_LOG_PREFIX} Error in relockAll operation:`, error);
                 dotscntrElement = document.getElementById('dotscntr');
                 percentageLoaderElement = document.getElementById('percentageLoader');
-                
+
                 if (dotscntrElement) {
                     animateElement(dotscntrElement, false, 'normal');
                 }
