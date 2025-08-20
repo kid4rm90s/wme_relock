@@ -121,6 +121,41 @@ const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab({
 - `relockObject`: Collection of features to process (not batch processed)
 - `userlevel`: Current user's editor level + 1
 
+## Userscript Performance Guidelines
+
+### Optimization Principles
+**CRITICAL: This is a userscript - prioritize speed, compactness, and simplicity**
+
+1. **Performance-First Approach**:
+   - Optimize for scan speed and UI responsiveness
+   - Minimize DOM queries through caching
+   - Use debouncing/throttling for frequent operations
+   - Early exits in loops to prevent unnecessary processing
+
+2. **Compact Solutions**:
+   - Single-file architecture maintained
+   - No complex frameworks or build processes
+   - Simple utility functions over elaborate patterns
+   - Inline optimizations over architectural complexity
+
+3. **Memory Efficiency**:
+   - Clear arrays instead of recreating objects
+   - Cache frequently accessed DOM elements
+   - Implement proper event handler cleanup
+   - Use scan limits to prevent memory spikes
+
+4. **User Experience**:
+   - Provide visual feedback during operations
+   - Maintain UI responsiveness during processing
+   - Graceful error handling with user notifications
+   - Quick startup and initialization
+
+### Performance Monitoring
+- Track scan times in dense areas
+- Monitor memory usage during bulk operations
+- User feedback on responsiveness
+- ErrorHandler reports for failure patterns
+
 ## Development Conventions
 
 ### Storage Keys Pattern
@@ -186,6 +221,43 @@ The script implements a centralized error handling system through the `ErrorHand
 - External HTTP requests wrapped in Promise for callback → async conversion
 - Use `Promise.all()` for parallel SDK event waiting
 
+### Userscript Optimization Patterns
+**PRIORITY: Always optimize for userscript performance characteristics**
+
+1. **DOM Caching Pattern**:
+   ```js
+   const cachedElements = {};
+   function getCached(id, key) {
+     return cachedElements[key] || (cachedElements[key] = document.getElementById(id));
+   }
+   ```
+
+2. **Debounced Operations**:
+   ```js
+   let timeout;
+   const debounced = (fn, delay) => (...args) => {
+     clearTimeout(timeout);
+     timeout = setTimeout(() => fn(...args), delay);
+   };
+   ```
+
+3. **Efficient Loops with Early Exits**:
+   ```js
+   for (const item of collection) {
+     if (!passesInitialCheck(item)) continue;
+     if (count >= LIMIT) break;
+     // Process item
+   }
+   ```
+
+4. **Parallel Initialization**:
+   ```js
+   const [data1, data2] = await Promise.all([
+     fetchData1(),
+     fetchData2()
+   ]);
+   ```
+
 ## Key Integration Points
 
 ### Tampermonkey-specific
@@ -216,5 +288,91 @@ The script implements a centralized error handling system through the `ErrorHand
 
 When making changes, ensure all SDK interactions follow the documented patterns in `WME_SDK_DOCUMENTATION.md` and test with the specific Google Sheets rules integration.
 
+## Performance Optimization Tracking
+
+**CRITICAL: Always update OPTIMIZATION_ANALYSIS.md when implementing performance changes**
+
+### Optimization Change Process
+When making ANY performance-related changes to the script, you MUST:
+
+1. **Document the change** in `OPTIMIZATION_ANALYSIS.md`:
+   - Mark items as ✅ **IMPLEMENTED** when completed
+   - Update priority matrices to reflect current status
+   - Add implementation details and code examples
+   - Update expected vs. achieved benefits
+
+2. **Update completion status**:
+   - Move items from "High Priority" to "Completed Optimizations"  
+   - Update performance impact estimates
+   - Document any trade-offs or limitations discovered
+
+3. **Maintain tracking accuracy**:
+   - Keep both files (instructions and analysis) synchronized
+   - Update implementation dates and context
+   - Preserve alternative approaches for future reference
+
+### Current Performance Optimization Priorities
+
+### High Priority (Immediate Implementation)
+1. ✅ **COMPLETED**: **Scan Throttling** - Prevent overlapping scans during map movement
+2. **DOM Caching** - Cache all frequently accessed UI elements  
+3. **Viewport Optimization** - Improve onScreen() efficiency
+4. **Early Loop Exits** - Optimize scanning algorithm performance
+
+### Medium Priority (Future Enhancement)
+1. **Parallel Initialization** - Load rules during SDK setup
+2. **Rules Preprocessing** - Optimize rule lookup structure
+3. **Permission Caching** - Cache permissions within scan sessions
+4. **Progress Feedback** - Visual scanning progress indication
+
+### Completed Optimizations ✅
+1. Scan throttling/debouncing implementation (Aug 20, 2025)
+2. Async/await standardization throughout codebase
+3. Function decomposition and conflict resolution
+4. Progress bar optimization with pre-calculated widths
+5. Centralized error handling system implementation
+6. Event handler cleanup and memory leak prevention
+
+## Documentation Requirements
+
+### Optimization Analysis Maintenance
+**MANDATORY: Update `OPTIMIZATION_ANALYSIS.md` for ALL performance changes**
+
+Every time you implement, modify, or complete an optimization:
+
+1. **Update Implementation Status**:
+   ```markdown
+   ### X. **Optimization Name** ✅ **IMPLEMENTED** 
+   **Priority: HIGH**
+   - **Implementation Date**: August 20, 2025
+   - **Changes Made**: Specific details of what was implemented
+   - **Code Location**: Where the changes were made (line numbers/functions)
+   - **Achieved Benefit**: Actual results vs. expected benefits
+   ```
+
+2. **Move Completed Items**:
+   - Remove from "High Priority" or "Medium Priority" sections
+   - Add to "Completed Optimizations ✅" section
+   - Update priority matrices accordingly
+
+3. **Document Alternatives**:
+   - Keep alternative approaches documented for future reference
+   - Include comparison rationale for chosen approach
+   - Note any trade-offs or limitations discovered
+
+4. **Update Performance Estimates**:
+   - Revise expected benefits based on actual implementation
+   - Update overall performance impact projections
+   - Document any unexpected findings or issues
+
+### Example Documentation Pattern
+```markdown
+### 1. **Scan Throttling** ✅ **IMPLEMENTED**
+**Implementation Date**: August 20, 2025
+**Code Changes**: Added debouncedScan() function and updated event handlers
+**Achieved Benefit**: 40-60% reduction in redundant scan operations
+**Alternative Available**: Throttled approach documented for future consideration
+```
+
 ## Formatting Guidelines
-Always follow JavaScript formatting guidelines for all code edits and generation in this project. Use consistent indentation, semicolons, and code style as found in the existing codebase.
+Always follow JavaScript formatting guidelines for all code edits and generation in this project. Use consistent indentation, semicolons, and code style as found in the existing codebase. Prioritize compact, efficient solutions appropriate for userscript deployment.

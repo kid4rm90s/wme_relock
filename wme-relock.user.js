@@ -162,6 +162,25 @@
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     /**
+     * Scan throttling variables and functions
+     */
+    let scanTimeout;
+    const SCAN_DEBOUNCE_DELAY = 300; // 300ms delay after map movement stops
+
+    /**
+     * Debounced scan function - only scans after map movement has settled
+     * Prevents excessive scanning during rapid map movements by waiting for
+     * a pause in map events before executing the scan.
+     * @returns {void}
+     */
+    const debouncedScan = () => {
+        clearTimeout(scanTimeout);
+        scanTimeout = setTimeout(() => {
+            scanArea();
+        }, SCAN_DEBOUNCE_DELAY);
+    };
+
+    /**
      * Animate element visibility with smooth transitions
      * Replaces jQuery's show/hide animations with native CSS transitions
      * @param {HTMLElement|string} element - Element or element ID to animate
@@ -1027,7 +1046,7 @@
                 }, `Event Handler Registration (${eventName})`, ErrorHandler.SEVERITY.ERROR)();
             }
 
-            const scanHandler = () => scanArea();
+            const scanHandler = () => debouncedScan();
             registerEventHandler("wme-map-move-end", scanHandler);
             registerEventHandler("wme-after-edit", scanHandler);
             function cleanup() {
