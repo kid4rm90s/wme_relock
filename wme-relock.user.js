@@ -18,6 +18,7 @@
 // ==/UserScript==
 
 /* jshint esversion: 11 */
+// eslint-disable-next-line no-redeclare
 /* global getWmeSdk */
 
 (function () {
@@ -43,6 +44,16 @@
     let wmeSDK;
     let userLevel; // Cache user level to avoid repeated SDK calls
     const minimumUserLevelForHigherLocks = 4;
+
+    // Global cached elements object for performance optimization
+    const cachedElements = {
+        relockAllbutton: null,
+        lockColorElement: null,
+        checkboxElements: {}, // Cache for road type checkboxes
+        respectRoutingElement: null, // Cache for respect routing checkbox
+        dotscntrElement: null, // Cache for progress loader
+        percentageLoaderElement: null // Cache for percentage display
+    };
 
     const LOADER_GIF = 'data:image/gif;base64,R0lGODlhEAAQAPQAAP///wAAAPj4+Dg4OISEhAYGBiYmJtbW1qioqBYWFnZ2dmZmZuTk5JiYmMbGxkhISFZWVgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH+GkNyZWF0ZWQgd2l0aCBhamF4bG9hZC5pbmZvACH5BAAKAAAAIf8LTkVUU0NBUEUyLjADAQAAACwAAAAAEAAQAAAFUCAgjmRpnqUwFGwhKoRgqq2YFMaRGjWA8AbZiIBbjQQ8AmmFUJEQhQGJhaKOrCksgEla+KIkYvC6SJKQOISoNSYdeIk1ayA8ExTyeR3F749CACH5BAAKAAEALAAAAAAQABAAAAVoICCKR9KMaCoaxeCoqEAkRX3AwMHWxQIIjJSAZWgUEgzBwCBAEQpMwIDwY1FHgwJCtOW2UDWYIDyqNVVkUbYr6CK+o2eUMKgWrqKhj0FrEM8jQQALPFA3MAc8CQSAMA5ZBjgqDQmHIyEAIfkEAAoAAgAsAAAAABAAEAAABWAgII4j85Ao2hRIKgrEUBQJLaSHMe8zgQo6Q8sxS7RIhILhBkgumCTZsXkACBC+0cwF2GoLLoFXREDcDlkAojBICRaFLDCOQtQKjmsQSubtDFU/NXcDBHwkaw1cKQ8MiyEAIfkEAAoAAwAsAAAAABAAEAAABVIgII5kaZ6AIJQCMRTFQKiDQx4GrBfGa4uCnAEhQuRgPwCBtwK+kCNFgjh6QlFYgGO7baJ2CxIioSDpwqNggWCGDVVGphly3BkOpXDrKfNm/4AhACH5BAAKAAQALAAAAAAQABAAAAVgICCOZGmeqEAMRTEQwskYbV0Yx7kYSIzQhtgoBxCKBDQCIOcoLBimRiFhSABYU5gIgW01pLUBYkRItAYAqrlhYiwKjiWAcDMWY8QjsCf4DewiBzQ2N1AmKlgvgCiMjSQhACH5BAAKAAUALAAAAAAQABAAAAVfICCOZGmeqEgUxUAIpkA0AMKyxkEiSZEIsJqhYAg+boUFSTAkiBiNHks3sg1ILAfBiS10gyqCg0UaFBCkwy3RYKiIYMAC+RAxiQgYsJdAjw5DN2gILzEEZgVcKYuMJiEAOwAAAAAAAAAAAA==';
     const REQUEST_TIMEOUT = 20000; // in ms
@@ -109,6 +120,7 @@
 
             if (severity === this.SEVERITY.CRITICAL) {
                 const userMessage = `${SCRIPT_LOG_PREFIX} Critical Error in ${context}\n${errorMsg}\n\nScript may not function properly.`;
+                // eslint-disable-next-line no-alert
                 alert(userMessage);
             }
 
@@ -162,25 +174,6 @@
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     /**
-     * Scan throttling variables and functions
-     */
-    let scanTimeout;
-    const SCAN_DEBOUNCE_DELAY = 300; // 300ms delay after map movement stops
-
-    /**
-     * Debounced scan function - only scans after map movement has settled
-     * Prevents excessive scanning during rapid map movements by waiting for
-     * a pause in map events before executing the scan.
-     * @returns {void}
-     */
-    const debouncedScan = () => {
-        clearTimeout(scanTimeout);
-        scanTimeout = setTimeout(() => {
-            scanArea();
-        }, SCAN_DEBOUNCE_DELAY);
-    };
-
-    /**
      * Animate element visibility with smooth transitions
      * Replaces jQuery's show/hide animations with native CSS transitions
      * @param {HTMLElement|string} element - Element or element ID to animate
@@ -216,6 +209,33 @@
                 el.style.display = 'none';
                 el.style.opacity = '1';
             }, duration);
+        }
+    }
+
+    /**
+     * Utility function to show/hide progress loading elements
+     * Optimizes repeated code patterns for managing dotscntr and percentageLoader elements
+     * Uses global cachedElements object and animateElement for consistent behavior
+     * @param {boolean} show - true to show, false to hide progress elements
+     * @param {number|null} progressWidth - Width for percentage loader in pixels (e.g., 50, 100)
+     */
+    function toggleProgressElements(show = false, progressWidth = null) {
+        if (cachedElements.dotscntrElement) {
+            if (show) {
+                cachedElements.dotscntrElement.style.display = 'inline-block';
+            } else {
+                animateElement(cachedElements.dotscntrElement, false, 'normal');
+            }
+        }
+        if (cachedElements.percentageLoaderElement) {
+            if (show) {
+                cachedElements.percentageLoaderElement.style.display = 'block';
+                if (progressWidth !== null) {
+                    cachedElements.percentageLoaderElement.style.width = progressWidth + 'px';
+                }
+            } else {
+                animateElement(cachedElements.percentageLoaderElement, false, 'normal');
+            }
         }
     }
 
@@ -337,14 +357,11 @@
         // Get road types dynamically from SDK instead of hardcoded mapping
         let roadTypeConfig = {};
         let rulesDB = {};
-        let relockObject = {};
-        let cachedElements = {
-            relockAllbutton: null,
-            lockColorElement: null,
-            checkboxElements: {}, // Cache for road type checkboxes
-            dotscntrElement: null, // Cache for progress loader
-            percentageLoaderElement: null // Cache for percentage display
-        };
+        const relockObject = {};
+
+        // Scan throttling variables
+        let scanTimeout;
+        const SCAN_DEBOUNCE_DELAY = 300; // 300ms delay after map movement stops
 
         /**
          * Initialize road types from SDK
@@ -542,7 +559,7 @@
                     true
                 );
             }
-            let w = window.open();
+            const w = window.open();
             w.document.open();
             w.document.write(res.responseText);
             w.document.close();
@@ -558,14 +575,14 @@
                     onload: function (res) {
                         resolve(res);
                     },
-                    onreadystatechange: function (res) {
+                    onreadystatechange: function (_res) {
                     },
-                    ontimeout: function (res) {
+                    ontimeout: function (_res) {
                         const error = new Error('Request timeout');
                         ErrorHandler.handle(error, 'HTTP Request', ErrorHandler.SEVERITY.CRITICAL);
                         reject(error);
                     },
-                    onerror: function (res) {
+                    onerror: function (_res) {
                         const error = new Error('Request error');
                         ErrorHandler.handle(error, 'HTTP Request', ErrorHandler.SEVERITY.CRITICAL);
                         reject(error);
@@ -636,11 +653,6 @@
                     return;
                 }
 
-                let respectRouting = document.getElementById(ID_KEYS.RESPECT_ROUTING);
-                if (!(cachedElements.relockAllbutton && respectRouting)) {
-                    return;
-                }
-
                 hideInactiveCities();
                 // Clear existing arrays instead of recreating for better memory efficiency
                 Object.values(roadTypeConfig).forEach(function (street) {
@@ -654,9 +666,9 @@
                 });
 
                 let foundBadlocks = false;
-                let respectRoutingRoadType = respectRouting.checked;
+                const respectRoutingRoadType = cachedElements.respectRoutingElement && cachedElements.respectRoutingElement.checked;
                 let count = 0;
-                let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : DEFAULT_STREET_LOCKS;
+                const ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : DEFAULT_STREET_LOCKS;
                 console.debug(`${SCRIPT_LOG_PREFIX} Rules to be used`, ABBR);
 
                 const segments = wmeSDK.DataModel.Segments.getAll();
@@ -684,7 +696,7 @@
                                 const street = wmeSDK.DataModel.Streets.getById({ streetId: segment.primaryStreetId });
                                 cityID = street ? street.cityId : null;
                             }
-                        } catch (err) {
+                        } catch {
                             console.warn(`${SCRIPT_LOG_PREFIX} Could not get street info for segment:`, segment.id);
                         }
 
@@ -737,8 +749,8 @@
                 }
 
                 Object.entries(relockObject).forEach(([key, value]) => {
-                    let idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
-                    let rightParentElement = document.getElementById(idPrefix);
+                    const idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
+                    const rightParentElement = document.getElementById(idPrefix);
                     if (!rightParentElement) return;
 
                     // Find existing elements or create them if they don't exist
@@ -787,6 +799,19 @@
         }, 'Area Scanning', ErrorHandler.SEVERITY.WARNING);
 
         /**
+         * Debounced scan function - only scans after map movement has settled
+         * Prevents excessive scanning during rapid map movements by waiting for
+         * a pause in map events before executing the scan.
+         * @returns {void}
+         */
+        const debouncedScan = () => {
+            clearTimeout(scanTimeout);
+            scanTimeout = setTimeout(() => {
+                scanArea();
+            }, SCAN_DEBOUNCE_DELAY);
+        };
+
+        /**
          * Update lock status icon with appropriate CSS class
          * Uses cached DOM element for better performance
          * @param {boolean} hasErrors - Whether there are lock errors
@@ -804,26 +829,26 @@
 
             roadTypeConfig = initializeRoadTypes();
             const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab();
-            let relockContent = document.createElement('div');
-            let relockTitle = document.createElement('wz-overline');
-            let relockSubTitle = document.createElement('wz-label');
-            let rulesSubTitle = document.createElement('wz-label');
-            let relockAllbutton = document.createElement('wz-button');
-            let relockSub = document.createElement('p');
-            let versionTitle = document.createElement('wz-label');
-            let resultsCntr = document.createElement('div');
-            let rulesCntr = document.createElement('div');
-            let alertCntr = document.createElement('div');
-            let hidebutton = document.createElement('div');
-            let dotscntr = document.createElement('div');
-            let inputDiv1 = document.createElement('div');
-            let inputDiv2 = document.createElement('div');
-            let includeAllSegments = document.createElement('input');
-            let includeAllSegmentsLabel = document.createElement('label');
-            let respectRouting = document.createElement('input');
-            let respectRoutingLabel = document.createElement('label');
-            let percentageLoader = document.createElement('div');
-            let relockTabLabel = document.createTextNode('Re-lock Segments & POI');
+            const relockContent = document.createElement('div');
+            const relockTitle = document.createElement('wz-overline');
+            const relockSubTitle = document.createElement('wz-label');
+            const rulesSubTitle = document.createElement('wz-label');
+            const relockAllbutton = document.createElement('wz-button');
+            const relockSub = document.createElement('p');
+            const versionTitle = document.createElement('wz-label');
+            const resultsCntr = document.createElement('div');
+            const rulesCntr = document.createElement('div');
+            const alertCntr = document.createElement('div');
+            const hidebutton = document.createElement('div');
+            const dotscntr = document.createElement('div');
+            const inputDiv1 = document.createElement('div');
+            const inputDiv2 = document.createElement('div');
+            const includeAllSegments = document.createElement('input');
+            const includeAllSegmentsLabel = document.createElement('label');
+            const respectRouting = document.createElement('input');
+            const respectRoutingLabel = document.createElement('label');
+            const percentageLoader = document.createElement('div');
+            const relockTabLabel = document.createTextNode('Re-lock Segments & POI');
             const lockStatusIcon = document.createElement('span');
             lockStatusIcon.id = 'lockcolor';
             lockStatusIcon.className = 'fa fa-lock rl-lock-status-ok';
@@ -877,6 +902,8 @@
             respectRouting.value = "value";
             respectRouting.checked = (localStorage.getItem(ID_KEYS.RESPECT_ROUTING) == 'true');
             respectRouting.id = ID_KEYS.RESPECT_ROUTING;
+            // Cache the element for performance optimization
+            cachedElements.respectRoutingElement = respectRouting;
             respectRouting.onclick = () => {
                 localStorage.setItem(ID_KEYS.RESPECT_ROUTING, respectRouting.checked.toString());
                 scanArea(); // No parameters needed
@@ -887,13 +914,13 @@
 
             resultsCntr.className = 'rl-container';
             Object.entries(roadTypeConfig).forEach(([key, value]) => {
-                let rowContainer = document.createElement('div');
+                const rowContainer = document.createElement('div');
                 rowContainer.className = 'rl-flex-row';
 
-                let leftKeyContainer = document.createElement('div');
-                let checkboxElement = document.createElement('input');
-                let labelElement = document.createElement('label');
-                let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType;
+                const leftKeyContainer = document.createElement('div');
+                const checkboxElement = document.createElement('input');
+                const labelElement = document.createElement('label');
+                const idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType;
 
                 checkboxElement.type = 'checkbox';
                 checkboxElement.checked = (localStorage.getItem(idPrefix + ID_KEYS.ELM_CHK) == 'true');
@@ -919,9 +946,9 @@
                 leftKeyContainer.appendChild(checkboxElement);
                 leftKeyContainer.appendChild(labelElement);
 
-                let rightParentElement = document.createElement('div');
+                const rightParentElement = document.createElement('div');
                 rightParentElement.className = 'rl-flex-right';
-                let counterElement = document.createElement('div');
+                const counterElement = document.createElement('div');
                 counterElement.className = 'rl-flex-counter';
                 counterElement.textContent = '-';
                 rightParentElement.id = idPrefix + ID_KEYS.ROAD_TYPE_VALUE;
@@ -936,10 +963,10 @@
             let rowElm;
             let colElm;
 
-            let tableElm = document.createElement('table');
+            const tableElm = document.createElement('table');
             tableElm.className = 'tg';
 
-            let bodyElm = document.createElement('tbody');
+            const bodyElm = document.createElement('tbody');
 
             let countryRules = null;
             const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
@@ -966,7 +993,6 @@
                     tableElm.appendChild(rowElm);
 
                     const maxCol = 2;
-                    const maxColWidth = 140;
                     let colIndex = 0;
                     rowElm = document.createElement('tr');
                     Object.entries(value.Locks).forEach(([k, v]) => {
@@ -1077,9 +1103,7 @@
                     if (window.relockTimer) {
                         clearTimeout(window.relockTimer);
                     }
-                    if (cachedElements.dotscntrElement) {
-                        cachedElements.dotscntrElement.style.display = 'none';
-                    }
+                    toggleProgressElements(false);
 
                     console.log(`${SCRIPT_LOG_PREFIX} Cleanup completed successfully`);
                 } catch (error) {
@@ -1119,13 +1143,7 @@
                     const progress = (i / total) * 100;
                     const newWidth = (progress / 100) * containerWidth;
 
-                    if (cachedElements.percentageLoaderElement) {
-                        cachedElements.percentageLoaderElement.style.display = 'block';
-                        cachedElements.percentageLoaderElement.style.width = newWidth + 'px';
-                    }
-                    if (cachedElements.dotscntrElement) {
-                        cachedElements.dotscntrElement.style.display = 'inline-block';
-                    }
+                    toggleProgressElements(true, newWidth);
                 };
 
                 // Process objects individually since SDK doesn't support batch actions
@@ -1150,28 +1168,16 @@
                     }
                 }
 
-                if (cachedElements.dotscntrElement) {
-                    cachedElements.dotscntrElement.style.display = 'none';
-                }
-                if (cachedElements.percentageLoaderElement) {
-                    cachedElements.percentageLoaderElement.style.display = 'none';
-                }
+                toggleProgressElements(false);
             } catch (error) {
                 console.error(`${SCRIPT_LOG_PREFIX} Error in relock operation:`, error);
-                if (cachedElements.dotscntrElement) {
-                    cachedElements.dotscntrElement.style.display = 'none';
-                }
-                if (cachedElements.percentageLoaderElement) {
-                    cachedElements.percentageLoaderElement.style.display = 'none';
-                }
+                toggleProgressElements(false);
             }
         }
 
         async function relockAll() {
             try {
-                if (cachedElements.dotscntrElement) {
-                    cachedElements.dotscntrElement.style.display = 'inline-block';
-                }
+                toggleProgressElements(true);
 
                 // Get container width once for all progress calculations
                 const container = document.getElementById('sidepanel-relockTab');
@@ -1199,10 +1205,7 @@
                             const progress = (processed / total) * 100;
                             const newWidth = (progress / 100) * containerWidth;
 
-                            if (cachedElements.percentageLoaderElement) {
-                                cachedElements.percentageLoaderElement.style.display = 'block';
-                                cachedElements.percentageLoaderElement.style.width = newWidth + 'px';
-                            }
+                            toggleProgressElements(true, newWidth);
 
                             // Small delay every 10 updates to prevent overwhelming the system
                             if (processed % 10 === 0) {
@@ -1217,25 +1220,15 @@
 
                 await scanArea();
 
-                if (cachedElements.dotscntrElement) {
-                    animateElement(cachedElements.dotscntrElement, false, 'normal');
-                }
-                if (cachedElements.percentageLoaderElement) {
-                    cachedElements.percentageLoaderElement.style.display = 'none';
-                }
+                toggleProgressElements(false);
             } catch (error) {
                 console.error(`${SCRIPT_LOG_PREFIX} Error in relockAll operation:`, error);
-                if (cachedElements.dotscntrElement) {
-                    animateElement(cachedElements.dotscntrElement, false, 'normal');
-                }
-                if (cachedElements.percentageLoaderElement) {
-                    cachedElements.percentageLoaderElement.style.display = 'none';
-                }
+                toggleProgressElements(false);
             }
         }
 
         function relockShowAlert() {
-            let includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
+            const includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
 
             if (includeAllSegments && includeAllSegments.checked) {
                 animateElement('alertCntr', true, 'fast');
@@ -1249,7 +1242,7 @@
             allRows.forEach((row) => {
                 let isActive = false;
                 const cities = wmeSDK.DataModel.Cities.getAll();
-                for (let city of cities) {
+                for (const city of cities) {
                     if (city.name === row.dataset.name) {
                         isActive = true;
                         break;

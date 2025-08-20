@@ -1,0 +1,53 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ESLint: Check for errors",
+            "type": "shell",
+            "command": "npx",
+            "args": ["eslint", "*.js"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": ["$eslint-stylish"]
+        },
+        {
+            "label": "ESLint: Fix auto-fixable issues",
+            "type": "shell",
+            "command": "npx",
+            "args": ["eslint", "*.js", "--fix"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": ["$eslint-stylish"]
+        },
+        {
+            "label": "ESLint: Check undeclared variables only",
+            "type": "shell",
+            "command": "npx",
+            "args": ["eslint", "*.js", "--rule", "no-undef:error", "--rule", "no-unused-vars:off"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": ["$eslint-stylish"]
+        }
+    ]
+}
