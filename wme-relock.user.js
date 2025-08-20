@@ -646,9 +646,14 @@
                 }
 
                 hideInactiveCities();
+                // Clear existing arrays instead of recreating for better memory efficiency
                 Object.values(roadTypeConfig).forEach(function (street) {
                     if (street.sdkType) {
-                        relockObject[street.sdkType] = [];
+                        if (!relockObject[street.sdkType]) {
+                            relockObject[street.sdkType] = [];
+                        } else {
+                            relockObject[street.sdkType].length = 0; // Clear existing array
+                        }
                     }
                 });
 
