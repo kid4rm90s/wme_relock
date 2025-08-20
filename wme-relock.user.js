@@ -340,7 +340,8 @@
         let relockObject = {};
         let cachedElements = {
             relockAllbutton: null,
-            lockColorElement: null
+            lockColorElement: null,
+            checkboxElements: {} // Cache for road type checkboxes
         };
 
         /**
@@ -655,11 +656,6 @@
                 let count = 0;
                 let ABBR = rulesDB[topCountry.abbr] ? rulesDB[topCountry.abbr][0].Locks : DEFAULT_STREET_LOCKS;
                 console.debug(`${SCRIPT_LOG_PREFIX} Rules to be used`, ABBR);
-                Object.entries(roadTypeConfig).forEach(([key, value]) => {
-                    let idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType + ID_KEYS.ELM_CHK;
-                    let chk = document.getElementById(idPrefix);
-                    value.scan = (chk && chk.checked);
-                });
 
                 const segments = wmeSDK.DataModel.Segments.getAll();
                 const venues = wmeSDK.DataModel.Venues.getAll();
@@ -670,9 +666,6 @@
 
                         const roadType = getRoadType(segment);
                         if (!roadType) continue;
-
-                        const streetType = Object.values(roadTypeConfig).find(s => s.sdkType === roadType);
-                        if (!streetType || !streetType.scan) continue;
 
                         if (!isSegmentEditable(segment)) continue;
 
@@ -900,11 +893,21 @@
                 checkboxElement.type = 'checkbox';
                 checkboxElement.checked = (localStorage.getItem(idPrefix + ID_KEYS.ELM_CHK) == 'true');
                 checkboxElement.id = idPrefix + ID_KEYS.ELM_CHK;
-                checkboxElement.onclick = function () {
-                    localStorage.setItem(idPrefix + ID_KEYS.ELM_CHK, checkboxElement.checked.toString());
-                    scanArea();
-                };
+                
+                // Initialize scan property from checkbox state
+                value.scan = checkboxElement.checked;
+                checkboxElement.onclick = (function(roadTypeKey, storageKey) {
+                    return function() {
+                        localStorage.setItem(storageKey, checkboxElement.checked.toString());
+                        // Update scan property directly for immediate use
+                        roadTypeConfig[roadTypeKey].scan = checkboxElement.checked;
+                        scanArea();
+                    };
+                })(key, idPrefix + ID_KEYS.ELM_CHK);
                 labelElement.htmlFor = idPrefix + ID_KEYS.ELM_CHK;
+                
+                // Cache checkbox element for performance
+                cachedElements.checkboxElements[value.sdkType] = checkboxElement;
                 labelElement.innerHTML = value.typeName;
                 labelElement.title = value.typeName;
 
