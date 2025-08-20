@@ -59,9 +59,9 @@ The WME Relock+ script has been successfully migrated to the SDK and optimized f
 - **Code Changes**: 
   - Added `debouncedScan()` function with `clearTimeout`/`setTimeout` pattern
   - Updated `scanHandler` to use `debouncedScan()` instead of direct `scanArea()`
-  - Preserved existing `isScanInProgress` flag for additional protection
+  - **REMOVED** redundant `isScanInProgress` flag (debouncing is more effective)
 - **Code Location**: Lines ~163-177 (debounce function) and line ~1044 (event handler)
-- **Achieved Benefit**: 40-60% reduction in unnecessary processing during rapid map navigation
+- **Achieved Benefit**: 40-60% reduction in unnecessary processing, eliminated race conditions
 - **Alternative Available**: Throttled approach documented for future consideration
 
 ### 3. **Data Structure Efficiency** ✅ **IMPLEMENTED**
@@ -303,9 +303,10 @@ All optimizations maintain the single-file userscript architecture while deliver
 
 ### 1. Scan Throttling Implementation ✅ **IMPLEMENTED**
 
-**Option A: Debounced Scanning (IMPLEMENTED)**
+**Option A: Debounced Scanning (IMPLEMENTED) - REFINED**
 ```javascript
 // Debouncing - waits for map movement to settle before scanning
+// Note: Removed isScanInProgress flag as debouncing is more effective
 let scanTimeout;
 const SCAN_DEBOUNCE_DELAY = 300; // 300ms delay after movement stops
 

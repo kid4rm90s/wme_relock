@@ -338,7 +338,6 @@
         let roadTypeConfig = {};
         let rulesDB = {};
         let relockObject = {};
-        let isScanInProgress = false;
         let cachedElements = {
             relockAllbutton: null,
             lockColorElement: null
@@ -627,21 +626,14 @@
         }
 
         const scanArea = ErrorHandler.wrapAsync(async () => {
-            if (isScanInProgress) {
-                console.debug(`${SCRIPT_LOG_PREFIX} Scan already in progress, skipping...`);
-                return;
-            }
-
             try {
-                isScanInProgress = true;
                 const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
                 if (!topCountry || !topCountry.abbr) {
                     ErrorHandler.handle('Top country not found or invalid', 'Country Retrieval', ErrorHandler.SEVERITY.ERROR);
                     return;
                 }
-                // Use cached user level instead of fetching from SDK each time
-                let respectRouting = document.getElementById(ID_KEYS.RESPECT_ROUTING);
 
+                let respectRouting = document.getElementById(ID_KEYS.RESPECT_ROUTING);
                 if (!(cachedElements.relockAllbutton && respectRouting)) {
                     return;
                 }
@@ -792,8 +784,8 @@
                     cachedElements.relockAllbutton.setAttribute('disabled', true);
                     updateLockStatusIcon(false);
                 }
-            } finally {
-                isScanInProgress = false;
+            } catch (error) {
+                ErrorHandler.handle(error, 'Area Scanning', ErrorHandler.SEVERITY.WARNING);
             }
         }, 'Area Scanning', ErrorHandler.SEVERITY.WARNING);
 
