@@ -340,7 +340,8 @@
         let relockObject = {};
         let isScanInProgress = false;
         let cachedElements = {
-            relockAllbutton: null
+            relockAllbutton: null,
+            lockColorElement: null
         };
 
         /**
@@ -786,12 +787,10 @@
                 // Update relock button state
                 if (foundBadlocks) {
                     cachedElements.relockAllbutton.removeAttribute('disabled');
-                    const lockColorElement = document.getElementById('lockcolor');
-                    updateLockStatusIcon(lockColorElement, true);
+                    updateLockStatusIcon(true);
                 } else {
                     cachedElements.relockAllbutton.setAttribute('disabled', true);
-                    const lockColorElement = document.getElementById('lockcolor');
-                    updateLockStatusIcon(lockColorElement, false);
+                    updateLockStatusIcon(false);
                 }
             } finally {
                 isScanInProgress = false;
@@ -800,13 +799,13 @@
 
         /**
          * Update lock status icon with appropriate CSS class
-         * @param {HTMLElement} element - The lock icon element
+         * Uses cached DOM element for better performance
          * @param {boolean} hasErrors - Whether there are lock errors
          */
-        function updateLockStatusIcon(element, hasErrors) {
-            if (!element) return;
+        function updateLockStatusIcon(hasErrors) {
+            if (!cachedElements.lockColorElement) return;
 
-            element.className = hasErrors
+            cachedElements.lockColorElement.className = hasErrors
                 ? 'fa fa-lock rl-lock-status-error'
                 : 'fa fa-lock rl-lock-status-ok';
         }
@@ -866,6 +865,7 @@
                 relockAll();
             };
             cachedElements.relockAllbutton = relockAllbutton;
+            cachedElements.lockColorElement = lockStatusIcon;
 
             includeAllSegments.type = 'checkbox';
             includeAllSegments.name = "name";
