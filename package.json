@@ -1,6 +1,6 @@
 {
   "name": "wme-relock",
-  "version": "2025.08.22.002",
+  "version": "2025.08.22.004",
   "description": "WME Relock userscript for Waze Map Editor",
   "scripts": {
     "lint": "eslint *.js",
