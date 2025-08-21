@@ -20,6 +20,8 @@
 /* jshint esversion: 11 */
 // eslint-disable-next-line no-redeclare
 /* global getWmeSdk */
+// eslint-disable-next-line no-redeclare
+/* global W */
 
 (function () {
     'use strict';
@@ -806,10 +808,18 @@
                 // Get current map extent once at scan start
                 currentMapExtent = wmeSDK.Map.getMapExtent();
                 
-                const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
+                let topCountry = wmeSDK.DataModel.Countries.getTopCountry();
                 if (!topCountry || !topCountry.abbr) {
-                    ErrorHandler.handle('Top country not found or invalid', 'Country Retrieval', ErrorHandler.SEVERITY.ERROR);
-                    return;
+                    // FIXME: there is a strange behavior (bug?) when retrieving the top country -
+                    // sometimes DataModel.Countries returns an empty object and so getTopCountry() returns null
+                    // as a temporary workaround, we will go old way and use global W object to get the countries.
+                    const countries = W?.model?.countries?.getObjectArray();
+                    if (countries?.[0]?.attributes) {
+                        topCountry = countries[0].attributes;
+                    } else {
+                        ErrorHandler.handle('Top country not found or invalid', 'Country Retrieval', ErrorHandler.SEVERITY.ERROR);
+                        return;
+                    }
                 }
 
                 // Start progress tracking for scanning
