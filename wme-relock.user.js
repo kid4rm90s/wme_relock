@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.21.016
+// @version      2025.08.21.018
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -590,17 +590,15 @@
             }, 'Viewport Visibility Check', ErrorHandler.SEVERITY.WARNING)();
         }
 
-        function hasPendingUR(venueId) {
-            return ErrorHandler.wrapSync(() => {
-                const requests = wmeSDK.DataModel.MapUpdateRequests.getAll();
-                return requests.some(req => req.venueId === venueId);
-            }, 'Update Request Check', ErrorHandler.SEVERITY.WARNING)();
-        }
-
         function isVenueEditable(venue) {
             if (!venue || !venue.id) return false;
 
             return ErrorHandler.wrapSync(() => {
+                // Check if venue has pending update requests
+                if (venue.venueUpdateRequests && venue.venueUpdateRequests.length > 0) {
+                    return false;
+                }
+                
                 return !venue.isAdLocked && wmeSDK.DataModel.Venues.hasPermissions({
                     permission: "EDIT_GEOMETRY",
                     venueId: venue.id
@@ -898,7 +896,6 @@
                 if (roadTypeConfig[POI_ID] && roadTypeConfig[POI_ID].scan) {
                     onScreenVenues.forEach(venue => {
                         if (!isVenueEditable(venue)) return;
-                        if (hasPendingUR(venue.id)) return;
                         if (count >= FIX_LIMIT_COUNT) return;
 
                         processedItems++;
