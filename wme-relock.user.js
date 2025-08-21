@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.21.013
+// @version      2025.08.21.016
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -516,6 +516,9 @@
         let scanTimeout;
         const SCAN_DEBOUNCE_DELAY = 300; // 300ms delay after map movement stops
 
+        // Current map extent for scan session
+        let currentMapExtent = null;
+
         /**
          * Initialize road types from SDK
          * @returns {Object} Road types object with structure: {id: {typeName, scan, sdkType}}
@@ -562,28 +565,26 @@
             if (!obj || !obj.geometry) return false;
 
             return ErrorHandler.wrapSync(() => {
-                const mapCenter = wmeSDK.Map.getMapCenter();
-                const zoomLevel = wmeSDK.Map.getZoomLevel();
-
-                if (!mapCenter || zoomLevel === undefined) return false;
+                // Use current map extent set at scan start for performance
+                if (!currentMapExtent) return false;
+                
+                const [left, bottom, right, top] = currentMapExtent;
                 const geometry = obj.geometry;
+                
                 if (geometry.type === 'Point') {
                     const [lon, lat] = geometry.coordinates;
-                    const distance = Math.sqrt(
-                        Math.pow(lon - mapCenter.lon, 2) +
-                        Math.pow(lat - mapCenter.lat, 2)
-                    );
-                    const threshold = Math.pow(2, (18 - zoomLevel)) * 0.01;
-                    return distance < threshold;
+                    return lon >= left && lon <= right && lat >= bottom && lat <= top;
                 } else if (geometry.type === 'LineString') {
-                    return geometry.coordinates.some(([lon, lat]) => {
-                        const distance = Math.sqrt(
-                            Math.pow(lon - mapCenter.lon, 2) +
-                            Math.pow(lat - mapCenter.lat, 2)
-                        );
-                        const threshold = Math.pow(2, (18 - zoomLevel)) * 0.01;
-                        return distance < threshold;
-                    });
+                    return geometry.coordinates.some(([lon, lat]) => 
+                        lon >= left && lon <= right && lat >= bottom && lat <= top
+                    );
+                } else if (geometry.type === 'Polygon') {
+                    // Check exterior ring (first array) and interior rings (if any)
+                    return geometry.coordinates.some(ring => 
+                        ring.some(([lon, lat]) => 
+                            lon >= left && lon <= right && lat >= bottom && lat <= top
+                        )
+                    );
                 }
                 return true;
             }, 'Viewport Visibility Check', ErrorHandler.SEVERITY.WARNING)();
@@ -804,6 +805,9 @@
 
         const scanArea = ErrorHandler.wrapAsync(async (showLoader = true) => {
             try {
+                // Get current map extent once at scan start
+                currentMapExtent = wmeSDK.Map.getMapExtent();
+                
                 const topCountry = wmeSDK.DataModel.Countries.getTopCountry();
                 if (!topCountry || !topCountry.abbr) {
                     ErrorHandler.handle('Top country not found or invalid', 'Country Retrieval', ErrorHandler.SEVERITY.ERROR);
