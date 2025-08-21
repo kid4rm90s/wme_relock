@@ -165,9 +165,11 @@ const ID_KEYS = {
   MSG_HIDE: 'Relock_msgHide',
   ALL_SEGMENTS: 'Relock_allSegments',
   RESPECT_ROUTING: 'Relock_respectRouting',
+  INFO_BOX: 'Relock_infoBox',
   ELM_PREFIX: 'Relock_',
-  ELM_CHK: '_chk',
-  ELM_VALUE: '_value'
+  CHECKBOX_SUFFIX: '_checkbox',
+  VALUE_SUFFIX: '_value',
+  ROAD_TYPE_CONTAINER_SUFFIX: '_roadTypeContainer'
 };
 ```
 

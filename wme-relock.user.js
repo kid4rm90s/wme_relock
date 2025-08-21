@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.21.012
+// @version      2025.08.21.013
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -28,10 +28,11 @@
         MSG_HIDE: 'Relock_msgHide',
         ALL_SEGMENTS: 'Relock_allSegments',
         RESPECT_ROUTING: 'Relock_respectRouting',
+        INFO_BOX: 'Relock_infoBox',
         ELM_PREFIX: 'Relock_',
-        ELM_CHK: '_chk',
-        ELM_VALUE: '_value',
-        ROAD_TYPE_VALUE: '_road_type_value'
+        CHECKBOX_SUFFIX: '_checkbox',
+        VALUE_SUFFIX: '_value',
+        ROAD_TYPE_CONTAINER_SUFFIX: '_roadTypeContainer'
     };
 
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -51,7 +52,12 @@
         lockColorElement: null,
         checkboxElements: {}, // Cache for road type checkboxes
         respectRoutingElement: null, // Cache for respect routing checkbox
-        scanCounterElement: null // Cache for scan counter element
+        scanCounterElement: null, // Cache for scan counter element
+        infoBox: null, // Cache for info box element
+        alertContainer: null, // Cache for alert container
+        relockContainer: null, // Cache for main relock container
+        roadTypeContainers: {}, // Cache for road type value containers
+        allSegmentsCheckbox: null // Cache for all segments checkbox
     };
 
     const REQUEST_TIMEOUT = 20000; // in ms
@@ -683,7 +689,11 @@
             }
 
             return ErrorHandler.wrapSync(() => {
-                const includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
+                // Use cached element instead of repeated getElementById
+                if (!cachedElements.allSegmentsCheckbox) {
+                    cachedElements.allSegmentsCheckbox = document.getElementById(ID_KEYS.ALL_SEGMENTS);
+                }
+                const includeAllSegments = cachedElements.allSegmentsCheckbox;
                 const allSegmentsInclude = includeAllSegments && includeAllSegments.checked && userLevel > minimumUserLevelForHigherLocks;
 
                 // Check if user has permission to modify this lock level
@@ -916,8 +926,13 @@
                 }
 
                 Object.entries(relockObject).forEach(([key, value]) => {
-                    const idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_VALUE;
-                    const rightParentElement = document.getElementById(idPrefix);
+                    const idPrefix = ID_KEYS.ELM_PREFIX + key + ID_KEYS.ROAD_TYPE_CONTAINER_SUFFIX;
+                    
+                    // Use cached container instead of repeated getElementById
+                    if (!cachedElements.roadTypeContainers[key]) {
+                        cachedElements.roadTypeContainers[key] = document.getElementById(idPrefix);
+                    }
+                    const rightParentElement = cachedElements.roadTypeContainers[key];
                     if (!rightParentElement) return;
 
                     // Find existing elements or create them if they don't exist
@@ -1024,7 +1039,7 @@
             const relockTabLabel = document.createTextNode('Re-lock Segments & POI');
             const lockStatusIcon = document.createElement('span');
             const scanCounterLabel = document.createElement('div');
-            lockStatusIcon.id = 'lockcolor';
+            // Removed unnecessary IDs - these elements are referenced directly
             lockStatusIcon.className = 'fa fa-lock rl-lock-status-ok';
 
             tabLabel.textContent = "Re-";
@@ -1044,29 +1059,33 @@
             infoBox.appendChild(paragraph2);
             
             infoBox.className = 'rl-info-box';
-            infoBox.id = 'sub';
+            // Use consistent ID naming pattern from ID_KEYS
+            infoBox.id = ID_KEYS.INFO_BOX;
             infoToggleButton.className = 'fa fa-question-circle rl-hide-button';
             infoToggleButton.title = 'How it works?';
             infoToggleButton.onclick = () => {
-                const infoBoxElement = document.getElementById('sub');
+                // Use cached element instead of repeated getElementById
+                if (!cachedElements.infoBox) {
+                    cachedElements.infoBox = document.getElementById(ID_KEYS.INFO_BOX);
+                }
+                const infoBoxElement = cachedElements.infoBox;
                 const isHidden = infoBoxElement.style.display === 'none';
                 
                 if (isHidden) {
-                    animateElement('sub', true, 'fast');
+                    animateElement(infoBoxElement, true, 'fast');
                     localStorage.setItem(ID_KEYS.MSG_HIDE, '0');
                 } else {
-                    animateElement('sub', false, 'fast');
+                    animateElement(infoBoxElement, false, 'fast');
                     localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
                 }
             };
             relockSubTitle.textContent = 'Bad locks found (limited to ' + FIX_LIMIT_COUNT + ' per pass):';
-            relockSubTitle.id = 'reshdr';
+            // Removed unnecessary ID - element is referenced directly
             rulesSubTitle.textContent = 'Active rules';
             versionTitle.textContent = 'Version ' + SCRIPT_VERSION;
             
-            // Configure scan counter with inline spinner
+            // Configure scan counter - removed unnecessary ID since element is referenced directly
             scanCounterLabel.textContent = 'Elements scanned: 0';
-            scanCounterLabel.id = 'scanCounter';
             scanCounterLabel.className = 'message';
             
             // Create container for scan counter with spinner
@@ -1078,10 +1097,10 @@
             cachedElements.scanCounterElement = scanCounterLabel;
             ProgressManager.scanCounterElement = scanCounterLabel;
 
-            relockAllbutton.id = 'rlkall';
             relockAllbutton.color = 'primary';
             relockAllbutton.textContent = 'Relock All';
             relockAllbutton.size = 'md';
+            // Removed unnecessary ID - button is referenced directly through cached variable
             relockAllbutton.onclick = () => {
                 relockAll();
             };
@@ -1129,8 +1148,8 @@
                 const idPrefix = ID_KEYS.ELM_PREFIX + value.sdkType;
 
                 checkboxElement.type = 'checkbox';
-                checkboxElement.checked = (localStorage.getItem(idPrefix + ID_KEYS.ELM_CHK) == 'true');
-                checkboxElement.id = idPrefix + ID_KEYS.ELM_CHK;
+                checkboxElement.checked = (localStorage.getItem(idPrefix + ID_KEYS.CHECKBOX_SUFFIX) == 'true');
+                checkboxElement.id = idPrefix + ID_KEYS.CHECKBOX_SUFFIX;
                 
                 // Initialize scan property from checkbox state
                 value.scan = checkboxElement.checked;
@@ -1141,8 +1160,8 @@
                         roadTypeConfig[roadTypeKey].scan = checkboxElement.checked;
                         scanArea();
                     };
-                })(key, idPrefix + ID_KEYS.ELM_CHK);
-                labelElement.htmlFor = idPrefix + ID_KEYS.ELM_CHK;
+                })(key, idPrefix + ID_KEYS.CHECKBOX_SUFFIX);
+                labelElement.htmlFor = idPrefix + ID_KEYS.CHECKBOX_SUFFIX;
                 
                 // Cache checkbox element for performance
                 cachedElements.checkboxElements[value.sdkType] = checkboxElement;
@@ -1157,15 +1176,16 @@
                 const counterElement = document.createElement('div');
                 counterElement.className = 'rl-flex-counter';
                 counterElement.textContent = '-';
-                rightParentElement.id = idPrefix + ID_KEYS.ROAD_TYPE_VALUE;
+                rightParentElement.id = idPrefix + ID_KEYS.ROAD_TYPE_CONTAINER_SUFFIX;
                 rightParentElement.appendChild(counterElement);
                 rowContainer.appendChild(leftKeyContainer);
                 rowContainer.appendChild(rightParentElement);
                 resultsCntr.appendChild(rowContainer);
             });
-            alertCntr.id = "alertCntr";
             alertCntr.className = 'rl-alert-box';
             alertCntr.textContent = 'Watch out for map exceptions, some higher locks are there for a reason!';
+            // Cache alert container for performance
+            cachedElements.alertContainer = alertCntr;
             let rowElm;
             let colElm;
 
@@ -1437,12 +1457,16 @@
         }
 
         function relockShowAlert() {
-            const includeAllSegments = document.getElementById(ID_KEYS.ALL_SEGMENTS);
+            // Use cached element instead of getElementById
+            if (!cachedElements.allSegmentsCheckbox) {
+                cachedElements.allSegmentsCheckbox = document.getElementById(ID_KEYS.ALL_SEGMENTS);
+            }
+            const includeAllSegments = cachedElements.allSegmentsCheckbox;
 
             if (includeAllSegments && includeAllSegments.checked) {
-                animateElement('alertCntr', true, 'fast');
+                animateElement(cachedElements.alertContainer, true, 'fast');
             } else {
-                animateElement('alertCntr', false, 'fast');
+                animateElement(cachedElements.alertContainer, false, 'fast');
             }
         }
 
