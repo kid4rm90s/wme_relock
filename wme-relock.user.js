@@ -347,7 +347,7 @@
             // Update scan counter
             this.updateScanCounter(current);
             
-            console.log(`${SCRIPT_LOG_PREFIX} Progress update: ${current}/${total} (${progress.toFixed(1)}%)`);
+            //console.debug(`${SCRIPT_LOG_PREFIX} Progress update: ${current}/${total} (${progress.toFixed(1)}%)`);
             this._toggleElements(true, progress); // Show spinning icon with current progress
         },
         
