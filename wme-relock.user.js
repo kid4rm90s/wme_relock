@@ -1326,6 +1326,10 @@
             const scanHandler = () => debouncedScan();
             registerEventHandler("wme-map-move-end", scanHandler);
             registerEventHandler("wme-after-edit", scanHandler);
+            registerEventHandler("wme-after-undo", scanHandler);
+            //registerEventHandler("wme-no-edits", scanHandler);
+            registerEventHandler("wme-map-zoom-changed", scanHandler);
+
             function cleanup() {
                 eventHandlers.forEach(handler => {
                     try {
@@ -1360,15 +1364,6 @@
             if (typeof window.addEventListener === 'function') {
                 window.addEventListener('beforeunload', cleanupScript);
             }
-            wmeSDK.Events.on({
-                eventName: "wme-after-undo",
-                eventHandler: scanHandler
-            });
-
-            wmeSDK.Events.on({
-                eventName: "wme-no-edits",
-                eventHandler: scanHandler
-            });
             relockShowAlert();
             scanHandler();
         }
