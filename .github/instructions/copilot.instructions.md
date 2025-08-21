@@ -376,3 +376,90 @@ Every time you implement, modify, or complete an optimization:
 
 ## Formatting Guidelines
 Always follow JavaScript formatting guidelines for all code edits and generation in this project. Use consistent indentation, semicolons, and code style as found in the existing codebase. Prioritize compact, efficient solutions appropriate for userscript deployment.
+
+### CSS Styling Guidelines
+**CRITICAL: Always use centralized CSS in `rlStyle` array instead of inline styling.**
+
+#### Required Approach:
+1. **Add new CSS classes to `rlStyle` array** for all static styling needs
+2. **Use class-based CSS selectors** with `rl-` prefix for consistency
+3. **Update `rlStyle` array** when adding new UI elements that need styling
+
+#### Allowed Inline Styling (Exceptions Only):
+- **Dynamic properties**: `display`, `visibility`, `opacity` for show/hide animations
+- **Dynamic colors**: Status-dependent color changes (red/green states)
+- **Dynamic dimensions**: Width/height that change based on calculations
+- **Animation properties**: Temporary transitions and transforms
+- **Positioning adjustments**: Dynamic top/left/margin adjustments
+
+#### Forbidden Inline Styling:
+- ❌ Static layout properties: `flexbox`, `grid`, `align-items`, `justify-content`
+- ❌ Static sizing: Fixed `width`, `height`, `padding`, `margin`
+- ❌ Static typography: `font-size`, `font-weight`, `text-align`
+- ❌ Static colors: `background-color`, `border-color` (unless dynamic)
+- ❌ Static borders: `border-radius`, `border-width`, `border-style`
+
+#### Implementation Pattern:
+```js
+// ✅ Correct: Add to rlStyle array
+const rlStyle = [
+    // existing styles...
+    '.rl-scan-counter { font-size: 90%; color: #666; margin-bottom: 5px; }',
+];
+
+// ✅ Correct: Use class name
+element.className = 'rl-scan-counter';
+
+// ✅ Correct: Dynamic inline styling (exception)
+element.style.display = isVisible ? 'block' : 'none';
+element.style.color = hasError ? 'red' : 'green';
+
+// ❌ Incorrect: Static inline styling
+element.style.fontSize = '90%';  // Should be in CSS class
+element.style.marginBottom = '5px';  // Should be in CSS class
+```
+
+This approach ensures:
+- **Maintainability**: All styling centralized in one location
+- **Consistency**: Uniform styling patterns across the script
+- **Performance**: Better CSS optimization and caching
+- **Flexibility**: Easy global style updates without code changes
+
+## Development Workflow Requirements
+
+### ⚠️ CRITICAL: ESLint and Syntax Checking Rules
+**🚫 NEVER run ESLint commands or tasks automatically after code changes.**
+
+#### ✅ ALLOWED:
+- Use `get_errors` tool to check for syntax issues
+- VS Code's built-in syntax highlighting and error detection
+- Manual ESLint runs if specifically requested by user
+
+#### 🚫 FORBIDDEN:
+- Running `npx eslint` commands after code changes
+- Using `run_task` with ESLint tasks unless explicitly requested
+- Automatic linting in terminal as validation step
+- Any ESLint execution without user permission
+
+#### Why This Rule Exists:
+- User has explicitly requested to stop automatic ESLint execution
+- VS Code provides sufficient syntax checking capabilities
+- Terminal commands should only run when necessary or requested
+- Performance: Avoid unnecessary command executions
+
+### Version Management
+**ALWAYS update version numbers after every code change:**
+1. **Userscript version** (`@version` in header): Format `YYYY.MM.DD.NNN` where:
+   - `YYYY.MM.DD` = current date
+   - `NNN` = simple increment (001, 002, 003, etc.)
+2. **Package.json version**: Update to match userscript version
+
+**Example version progression:**
+- `2025.08.21.001` → `2025.08.21.002` (same day, next change)
+- `2025.08.21.005` → `2025.08.22.001` (next day, reset increment)
+
+### Code Change Protocol
+1. Make code changes
+2. Update version numbers (both files)
+3. Use `get_errors` tool if syntax checking needed
+4. 🚫 **DO NOT run ESLint automatically**

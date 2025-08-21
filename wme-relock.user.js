@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.20.005
+// @version      2025.08.21.012
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -37,7 +37,7 @@
     const SCRIPT_ID = GM_info.script.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     const SCRIPT_VERSION = GM_info.script.version;
     const SCRIPT_LOG_PREFIX = 'Relock:';
-    const SCAN_LIMIT_COUNT = 150;
+    const FIX_LIMIT_COUNT = 150;
     const POI_ID = "90000"; // Fake ID for POI to not conflict with real street IDs
     const POI_NAME = "POI";
 
@@ -50,7 +50,8 @@
         relockAllbutton: null,
         lockColorElement: null,
         checkboxElements: {}, // Cache for road type checkboxes
-        respectRoutingElement: null // Cache for respect routing checkbox
+        respectRoutingElement: null, // Cache for respect routing checkbox
+        scanCounterElement: null // Cache for scan counter element
     };
 
     const REQUEST_TIMEOUT = 20000; // in ms
@@ -216,31 +217,37 @@
      */
     const ProgressManager = {
         containerWidth: null,
-        dotscntrElement: null,
+        spinnerElement: null,
         percentageLoaderElement: null,
+        scanCounterElement: null,
         
         /**
          * Internal method to show/hide progress elements
-         * Handles both spinner and progress bar with optimized calculations
-         * @param {boolean} show - true to show, false to hide progress elements
-         * @param {number|null} progressWidth - Width for percentage loader in pixels
+         * Handles both spinner and progress bar with percentage-based width
+         * @param {boolean} show - true for spinning icon (in progress), false for completion icon
+         * @param {number|null} progressPercent - Width for percentage loader as percentage (0-100)
          */
-        _toggleElements(show = false, progressWidth = null) {
-            if (this.dotscntrElement) {
+        _toggleElements(show = false, progressPercent = null) {
+            if (this.spinnerElement) {
+                this.spinnerElement.style.display = 'inline-block';
                 if (show) {
-                    this.dotscntrElement.style.display = 'inline-block';
+                    // Show spinning icon (operation in progress)
+                    this.spinnerElement.className = 'fa fa-spinner fa-spin rl-spinner';
                 } else {
-                    animateElement(this.dotscntrElement, false, 'normal');
+                    // Show completion icon (operation complete)
+                    this.spinnerElement.className = 'fa fa-check-circle rl-spinner-complete';
                 }
             }
             if (this.percentageLoaderElement) {
                 if (show) {
+                    // Show progress bar only during active operations
                     this.percentageLoaderElement.style.display = 'block';
-                    if (progressWidth !== null) {
-                        this.percentageLoaderElement.style.width = progressWidth + 'px';
+                    if (progressPercent !== null) {
+                        this.percentageLoaderElement.style.width = Math.max(progressPercent, 1) + '%';
                     }
                 } else {
-                    animateElement(this.percentageLoaderElement, false, 'normal');
+                    // Hide progress bar when complete
+                    this.percentageLoaderElement.style.display = 'none';
                 }
             }
         },
@@ -255,36 +262,44 @@
             const container = document.getElementById('sidepanel-relockTab') || relockContent;
             this.containerWidth = container ? container.offsetWidth : 300;
             
-            // Create spinner element if not already done
-            if (!this.dotscntrElement) {
-                this.dotscntrElement = document.getElementById('dotscntr');
-                if (!this.dotscntrElement) {
-                    // Create spinner element if it doesn't exist
-                    this.dotscntrElement = document.createElement('div');
-                    this.dotscntrElement.className = 'fa fa-spinner fa-spin';
-                    this.dotscntrElement.id = 'dotscntr';
-                    this.dotscntrElement.style.display = 'none';
-                    
-                    // Append to container if available
-                    if (relockContent) {
-                        relockContent.appendChild(this.dotscntrElement);
-                    }
+            // Find the button-progress container for progress bar only
+            const buttonProgressContainer = relockContent ? relockContent.querySelector('.rl-button-progress-container') : null;
+            
+            // Create a wrapper for progress elements (progress bar only)
+            let progressWrapper = buttonProgressContainer ? buttonProgressContainer.querySelector('.rl-progress-elements') : null;
+            if (!progressWrapper && buttonProgressContainer) {
+                progressWrapper = document.createElement('div');
+                progressWrapper.className = 'rl-progress-elements';
+                buttonProgressContainer.appendChild(progressWrapper);
+            }
+            
+            // Find the scan counter container for spinner placement
+            const scanCounterContainer = relockContent ? relockContent.querySelector('.rl-scan-counter-container') : null;
+            
+            // Create spinner element if not already done - place it in scan counter container
+            if (!this.spinnerElement) {
+                this.spinnerElement = document.createElement('div');
+                this.spinnerElement.className = 'fa fa-check-circle rl-spinner-complete'; // Start with completion icon
+                
+                // Insert spinner before the scan counter label if container available
+                if (scanCounterContainer) {
+                    // Insert as first child (before scan counter label)
+                    scanCounterContainer.insertBefore(this.spinnerElement, scanCounterContainer.firstChild);
+                } else if (relockContent) {
+                    relockContent.appendChild(this.spinnerElement);
                 }
             }
             
-            // Create progress bar element if not already done
+            // Create progress bar element if not already done - place it in progress wrapper
             if (!this.percentageLoaderElement) {
-                this.percentageLoaderElement = document.getElementById('percentageLoader');
-                if (!this.percentageLoaderElement) {
-                    // Create progress bar element if it doesn't exist
-                    this.percentageLoaderElement = document.createElement('div');
-                    this.percentageLoaderElement.id = 'percentageLoader';
-                    this.percentageLoaderElement.style.display = 'none';
-                    
-                    // Append to container if available
-                    if (relockContent) {
-                        relockContent.appendChild(this.percentageLoaderElement);
-                    }
+                this.percentageLoaderElement = document.createElement('div');
+                this.percentageLoaderElement.className = 'rl-progress-bar';
+                
+                // Append to progress wrapper if available
+                if (progressWrapper) {
+                    progressWrapper.appendChild(this.percentageLoaderElement);
+                } else if (relockContent) {
+                    relockContent.appendChild(this.percentageLoaderElement);
                 }
             }
             
@@ -296,10 +311,16 @@
          * @param {string} operationType - 'scan' or 'relock' for logging
          */
         start(operationType = 'operation') {
-            if (!this.containerWidth || !this.dotscntrElement || !this.percentageLoaderElement) {
+            if (!this.containerWidth || !this.spinnerElement || !this.percentageLoaderElement) {
                 this.init();
             }
-            this._toggleElements(true, 1); // Show with minimal width
+            this._toggleElements(true, 1); // Show spinning icon with minimal progress width (1%)
+            
+            // Reset and show scan counter for scanning operations
+            if (operationType === 'scan') {
+                this.updateScanCounter(0);
+            }
+            
             console.debug(`${SCRIPT_LOG_PREFIX} Started ${operationType} with progress tracking`);
         },
         
@@ -316,15 +337,29 @@
             if (total <= 0) return;
             
             const progress = Math.min((current / total) * 100, 100);
-            const newWidth = Math.max((progress / 100) * this.containerWidth, 1);
             
-            this._toggleElements(true, newWidth);
+            // Update scan counter
+            this.updateScanCounter(current);
+            
+            console.log(`${SCRIPT_LOG_PREFIX} Progress update: ${current}/${total} (${progress.toFixed(1)}%)`);
+            this._toggleElements(true, progress); // Show spinning icon with current progress
         },
         
         /**
-         * Complete progress tracking and hide all elements
+         * Update scan counter display
+         * @param {number} count - Number of elements scanned
+         */
+        updateScanCounter(count) {
+            if (this.scanCounterElement) {
+                this.scanCounterElement.textContent = `Elements scanned: ${count}`;
+            }
+        },
+        
+        /**
+         * Complete progress tracking and show completion icon
          */
         complete() {
+            // Show completion icon (progress bar gets hidden automatically)
             this._toggleElements(false);
         },
         
@@ -333,8 +368,9 @@
          */
         reset() {
             this.containerWidth = null;
-            this.dotscntrElement = null;
+            this.spinnerElement = null;
             this.percentageLoaderElement = null;
+            this.scanCounterElement = null;
         }
     };
 
@@ -420,10 +456,12 @@
                 '.tg .tg-type { text-align: left; vertical-align: top; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
                 '.tg-row:hover { background-color: #f5f5f5; }',
                 '.tg-row.active { background-color: #e8f0fe; }',
-                '#dotscntr { opacity: 0.8; width: 16px; height: 16px; margin-left: 5px; vertical-align: text-top; display: none; font-size: 14px; }',
-                '.fa-spin { animation: fa-spin 2s infinite linear; }',
+                '.rl-spinner { opacity: 0.8; width: 16px; height: 16px; vertical-align: text-top; display: none; font-size: 14px; }',
+                '.rl-spinner-complete { opacity: 0.8; width: 16px; height: 16px; vertical-align: text-top; font-size: 14px; color: green; }',
+                '.rl-scan-counter-container { display: flex; align-items: center; color: #666; margin-bottom: 5px; margin-right: 5px; gap: 3px; }',
+                '.fa-spin { animation: fa-spin 0.5s infinite linear; }',
                 '@keyframes fa-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }',
-                '#percentageLoader { transition: width 0.3s ease-in-out; width: 1px; height: 10px; background-color: green; margin-top: 10px; border: 1px solid #333333; display: none; }',
+                '.rl-progress-bar { transition: width 0.3s ease-in-out; width: 1%; height: 10px; background-color: green; margin-top: 0; border: 1px solid #333333; display: none; }',
                 '.rl-flex-row { display: flex; align-items: center; margin-bottom: 0; padding: 0; }',
                 '.rl-flex-row > div { flex: 1 1 auto; }',
                 '.rl-flex-row input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }',
@@ -432,13 +470,21 @@
                 '.rl-flex-row .rl-flex-counter { font-size: 100%; font-weight: bold; }',
                 '.rl-label { font-size: 95%; margin-left: 5px; vertical-align: middle; }',
                 '.rl-container { margin-right: 5px; margin-bottom: 5px; }',
-                '.rl-info-box { font-size: 85%; padding: 15px; border: 1px solid red; border-radius: 5px; position: relative; }',
+                '.rl-info-box { font-size: 85%; padding: 15px; border: 1px solid red; border-radius: 5px; position: relative; margin-right: 5px; }',
                 '.rl-alert-box { border: 1px solid #EBCCD1; background-color: #F2DEDE; color: #AC4947; font-weight: bold; font-size: 90%; border-radius: 5px; padding: 10px; margin: 5px 5px; display: none; }',
                 '.rl-close-btn { cursor: pointer; width: 16px; height: 16px; position: absolute; right: 3px; top: 3px; }',
                 '.rl-lock-icon { cursor: pointer; color: red; }',
                 '.rl-rules-table { font-size: 12px; }',
                 '.rl-lock-status-ok { color: green; }',
                 '.rl-lock-status-error { color: red; }',
+                '.rl-button-progress-container { display: flex; align-items: center; gap: 10px; margin: 10px 5px 10px 0; }',
+                '.rl-progress-elements { display: flex; align-items: center; gap: 5px; flex: 1; }',
+                '.rl-scan-counter { color: #666; margin-bottom: 5px; }',
+                '.rl-info-paragraph-first { margin-bottom: 10px; }',
+                '.rl-info-paragraph-last { margin-bottom: 0; }',
+                '.rl-hide-button { cursor: pointer; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: #666; font-size: 12px; margin-left: auto; margin-bottom: 8px; }',
+                '.rl-hide-button:hover { color: #333; }',
+                '.rl-version-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; margin-right: 5px; }',
             ];
 
             try {
@@ -774,18 +820,21 @@
                 const segments = wmeSDK.DataModel.Segments.getAll();
                 const venues = wmeSDK.DataModel.Venues.getAll();
                 
-                // Calculate total items for progress tracking
-                const totalItems = Math.min(segments.length + venues.length, SCAN_LIMIT_COUNT);
+                // Pre-filter on-screen segments and venues for accurate progress tracking
+                const onScreenSegments = segments.filter(segment => onScreen(segment));
+                const onScreenVenues = venues.filter(venue => onScreen(venue));
+                
+                // Calculate total items for progress tracking (limited by scan limit)
+                const totalOnScreenItems = onScreenSegments.length + onScreenVenues.length;
                 let processedItems = 0;
                 
-                for (const segment of segments) {
+                for (const segment of onScreenSegments) {
                     try {
-                        if (!onScreen(segment)) continue;
-                        if (count >= SCAN_LIMIT_COUNT) break;
+                        if (count >= FIX_LIMIT_COUNT) break;
 
                         processedItems++;
                         if (showLoader) {
-                            ProgressManager.update(processedItems, totalItems, 10); // Update every 10 items
+                            ProgressManager.update(processedItems, totalOnScreenItems, 10); // Update every 10 items
                         }
 
                         const roadType = getRoadType(segment);
@@ -824,7 +873,7 @@
                                 lockRank: desiredLockLevel
                             });
                             foundBadlocks = true;
-                            count++;
+                            count++; // increment only if a bad lock is found
                         }
                     } catch (segmentError) {
                         console.error(`${SCRIPT_LOG_PREFIX} Error processing segment:`, segmentError);
@@ -833,15 +882,14 @@
                 }
 
                 if (roadTypeConfig[POI_ID] && roadTypeConfig[POI_ID].scan) {
-                    venues.forEach(venue => {
-                        if (!onScreen(venue)) return;
+                    onScreenVenues.forEach(venue => {
                         if (!isVenueEditable(venue)) return;
                         if (hasPendingUR(venue.id)) return;
-                        if (count >= SCAN_LIMIT_COUNT) return;
+                        if (count >= FIX_LIMIT_COUNT) return;
 
                         processedItems++;
                         if (showLoader) {
-                            ProgressManager.update(processedItems, totalItems, 10); // Update every 10 items
+                            ProgressManager.update(processedItems, totalOnScreenItems, 10); // Update every 10 items
                         }
 
                         const address = wmeSDK.DataModel.Venues.getAddress({ venueId: venue.id });
@@ -862,7 +910,7 @@
                                 lockRank: desiredLockLevel
                             });
                             foundBadlocks = true;
-                            count++;
+                            count++; // increment only if a bad lock is found
                         }
                     });
                 }
@@ -887,7 +935,6 @@
 
                         if (!lockIconElement) {
                             lockIconElement = document.createElement('div');
-                            lockIconElement.className = 'fa fa-lock';
                             lockIconElement.className = 'fa fa-lock rl-lock-icon';
                             lockIconElement.onclick = (function(roadTypeKey) {
                                 return function() {
@@ -959,15 +1006,15 @@
             const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab();
             const relockContent = document.createElement('div');
             const relockTitle = document.createElement('wz-overline');
-            const relockSubTitle = document.createElement('wz-label');
-            const rulesSubTitle = document.createElement('wz-label');
+            const relockSubTitle = document.createElement('wz-h7');
+            const rulesSubTitle = document.createElement('wz-h7');
             const relockAllbutton = document.createElement('wz-button');
-            const relockSub = document.createElement('p');
+            const infoBox = document.createElement('p');
             const versionTitle = document.createElement('wz-label');
             const resultsCntr = document.createElement('div');
             const rulesCntr = document.createElement('div');
             const alertCntr = document.createElement('div');
-            const hidebutton = document.createElement('div');
+            const infoToggleButton = document.createElement('div');
             const inputDiv1 = document.createElement('div');
             const inputDiv2 = document.createElement('div');
             const includeAllSegments = document.createElement('input');
@@ -976,6 +1023,7 @@
             const respectRoutingLabel = document.createElement('label');
             const relockTabLabel = document.createTextNode('Re-lock Segments & POI');
             const lockStatusIcon = document.createElement('span');
+            const scanCounterLabel = document.createElement('div');
             lockStatusIcon.id = 'lockcolor';
             lockStatusIcon.className = 'fa fa-lock rl-lock-status-ok';
 
@@ -986,26 +1034,49 @@
             // Create description content using proper paragraph elements
             const paragraph1 = document.createElement('p');
             paragraph1.textContent = 'Your on-screen area is automatically scanned when you load or pan around. Pressing the lock behind each type will relock only those results, or you can choose to relock all.';
-            paragraph1.style.marginBottom = '10px';
+            paragraph1.className = 'rl-info-paragraph-first';
             
             const paragraph2 = document.createElement('p');
             paragraph2.textContent = 'You can only relock segments lower or equal to your current editor level. Segments locked higher than normal are left alone.';
-            paragraph2.style.marginBottom = '0';
+            paragraph2.className = 'rl-info-paragraph-last';
             
-            relockSub.appendChild(paragraph1);
-            relockSub.appendChild(paragraph2);
+            infoBox.appendChild(paragraph1);
+            infoBox.appendChild(paragraph2);
             
-            relockSub.className = 'rl-info-box';
-            relockSub.id = 'sub';
-            hidebutton.style.cssText = 'cursor:pointer;width:16px;height:16px;position:absolute;right:3px;top:3px;background-image:url(\'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNui8sowAAAAWdEVYdENyZWF0aW9uIFRpbWUAMTEvMjAvMTVnsXrkAAADTUlEQVQ4jW2TW0xbZQCAv3ODnpYWegEGo1wKwzBcxAs6dONSjGMm3kjmnBqjYqLREE2WLDFTIBmbmmxRpzHy4NPi4zRLfNBlZjjtnCEaOwYDJUDcVqC3UzpWTkt7fp80hvk9f/nePkkIwWb+gA5jMXLQjK50Zc2cuKVp4wlX2UevtAYubnal/waWoTI1N38keu7ck2uTl335ZFJCkpE8XlGob4ibgeZvMl7P8MtdO6/dFohDe/Sn0LdzJ457MuHfUYqLkYtsSIqMJASyIiNv30Gm6+G1zNbqvpf6gqF/AwaUXx+/MDdz6KArH4ujVVRAbgPVroMsQz6P6nJiGUnUGj/pR/tTyx2dtW+11t2UAa5Pz34w//GHLitpsG1wkODp0xQ11GOZJpgmzq5uqo8ew76zAxFPUDJxscwzFR4BkGfh/tj58/3Zq9OoFZU0PHsAd00NnWNj6IEApd3duA48g2nXKenpQSl1oceWsUeuPfdp+M9GZf/zA5+lz3x9lxRbAUli+dIlKnt7Ud1uCk1NJH0+VnMmq6EQfw0NUzCSULBQfT4HVf4iNRO50VlIGSi6jup0sj5zlTO7d9N48iRLa2vkCwWsyTArbx/GAaSBm/MLyLm85OjZs0c2zawQsoRmt5NeXCRyeRLh9rBkGBSEwF6i09h+L96GemyAx2bDK4ENkGRJkbM2fVy4PRhT08RmZvH09VE29C6ixEFuahL3hklLby9PhEKUt7VRZln4kHD669Bqtl6Q7W07jqWL9FQiEkHTdUoGBsgXF5EPh0m8M8Tc62/CSoLSqmqaR4ZxaRpenxfbgw8lCy2Nx5Uv3xuNXEll7shO/HI38Rjr09NImkriyCgOy0JZTZM4+x3C7SY+epTaLZWsdwXJPNV/6jF/9ReSEIKzmcKWpbHPF9OHDxUr6xksoAiQJAmnpuEWAqeq4G9uRr7nPpZeeDG10NqybV+5Ly4DPGJXlsv79u51v38iK22/EwmwACEEIpdD2tjApmncan8A49XX4qtNgeC+cl/8tpm+jxoBY+K3N7I/jj+dvxKuIhZV7KpKWV295dy1K6YEg1/NO2wj+/210f+98R9+hub0wo1BOZnslRVV16orf0hVeD55HH7d7P4N0V1gY9/zcaEAAAAASUVORK5CYII=\');';
-            hidebutton.onclick = () => {
-                localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
-                animateElement('sub', false, 'slow');
+            infoBox.className = 'rl-info-box';
+            infoBox.id = 'sub';
+            infoToggleButton.className = 'fa fa-question-circle rl-hide-button';
+            infoToggleButton.title = 'How it works?';
+            infoToggleButton.onclick = () => {
+                const infoBoxElement = document.getElementById('sub');
+                const isHidden = infoBoxElement.style.display === 'none';
+                
+                if (isHidden) {
+                    animateElement('sub', true, 'fast');
+                    localStorage.setItem(ID_KEYS.MSG_HIDE, '0');
+                } else {
+                    animateElement('sub', false, 'fast');
+                    localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
+                }
             };
-            relockSubTitle.textContent = 'Results (limited to ' + SCAN_LIMIT_COUNT + ' per pass)';
+            relockSubTitle.textContent = 'Bad locks found (limited to ' + FIX_LIMIT_COUNT + ' per pass):';
             relockSubTitle.id = 'reshdr';
             rulesSubTitle.textContent = 'Active rules';
             versionTitle.textContent = 'Version ' + SCRIPT_VERSION;
+            
+            // Configure scan counter with inline spinner
+            scanCounterLabel.textContent = 'Elements scanned: 0';
+            scanCounterLabel.id = 'scanCounter';
+            scanCounterLabel.className = 'message';
+            
+            // Create container for scan counter with spinner
+            const scanCounterContainer = document.createElement('div');
+            scanCounterContainer.className = 'rl-scan-counter-container';
+            scanCounterContainer.appendChild(scanCounterLabel);
+            
+            // Cache the scan counter element for ProgressManager
+            cachedElements.scanCounterElement = scanCounterLabel;
+            ProgressManager.scanCounterElement = scanCounterLabel;
 
             relockAllbutton.id = 'rlkall';
             relockAllbutton.color = 'primary';
@@ -1167,10 +1238,20 @@
 
             // add to stage
             relockContent.appendChild(relockTitle);
-            relockContent.appendChild(versionTitle);
-            if (localStorage.getItem(ID_KEYS.MSG_HIDE) !== '1') {
-                relockSub.appendChild(hidebutton);
-                relockContent.appendChild(relockSub);
+            
+            // Create version container with hide button
+            const versionContainer = document.createElement('div');
+            versionContainer.className = 'rl-version-container';
+            versionContainer.appendChild(versionTitle);
+            versionContainer.appendChild(infoToggleButton);
+            relockContent.appendChild(versionContainer);
+            
+            // Always append the info box
+            relockContent.appendChild(infoBox);
+            
+            // Set initial visibility based on localStorage
+            if (localStorage.getItem(ID_KEYS.MSG_HIDE) === '1') {
+                infoBox.style.display = 'none';
             }
 
             inputDiv1.appendChild(respectRouting);
@@ -1187,9 +1268,19 @@
             relockContent.appendChild(inputDiv2);
 
             relockContent.appendChild(alertCntr);
+            
+            // Create a flex container for the relock button and progress elements
+            const buttonProgressContainer = document.createElement('div');
+            buttonProgressContainer.className = 'rl-button-progress-container';
+            buttonProgressContainer.appendChild(relockAllbutton);
+            relockContent.appendChild(buttonProgressContainer);
+            
+            // Append scan counter container (created earlier)
+            relockContent.appendChild(scanCounterContainer);
+            
             relockContent.appendChild(relockSubTitle);
             relockContent.appendChild(resultsCntr);
-            relockContent.appendChild(relockAllbutton);
+            
             relockContent.appendChild(rulesSubTitle);
             relockContent.appendChild(rulesCntr);
 
@@ -1197,7 +1288,6 @@
 
             // Initialize ProgressManager after UI elements are in the DOM
             ProgressManager.init(relockContent);
-
 
             const eventHandlers = [];
 
