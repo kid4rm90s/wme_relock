@@ -284,11 +284,12 @@ The script implements a centralized error handling system through the `ErrorHand
 
 ## File Structure
 - `wme-relock.user.js` - Single-file userscript (1300+ lines)
-- `WME_SDK_DOCUMENTATION.md` - Local SDK reference documentation
+- `WME_SDK_DOCUMENTATION.md` - Quick reference and getting started guide for SDK
+- `WME_SDK_COMPLETE_OFFLINE_REFERENCE.md` - Comprehensive offline SDK documentation
 - `README.md` - Basic project description and differences from original
 - `.github/instructions/copilot.instructions.md` - Development guidelines and patterns
 
-When making changes, ensure all SDK interactions follow the documented patterns in `WME_SDK_DOCUMENTATION.md` and test with the specific Google Sheets rules integration.
+When making changes, ensure all SDK interactions follow the documented patterns in `WME_SDK_DOCUMENTATION.md` (for quick reference) and `WME_SDK_COMPLETE_OFFLINE_REFERENCE.md` (for detailed implementation) and test with the specific Google Sheets rules integration.
 
 ## Performance Optimization Tracking
 
@@ -465,3 +466,271 @@ This approach ensures:
 2. Update version numbers (both files)
 3. Use `get_errors` tool if syntax checking needed
 4. 🚫 **DO NOT run ESLint automatically**
+
+## WME SDK Documentation Maintenance
+
+### Overview
+The project maintains two complementary SDK documentation files:
+
+1. **`WME_SDK_DOCUMENTATION.md`** - Quick reference and getting started guide
+   - Compact format (~214 lines) for immediate use
+   - Essential setup, common patterns, and troubleshooting
+   - Links to comprehensive documentation for details
+
+2. **`WME_SDK_COMPLETE_OFFLINE_REFERENCE.md`** - Complete offline reference
+   - Comprehensive documentation (~1000+ lines) with all SDK details
+   - Complete API coverage: 35+ classes, 60+ interfaces, 70+ type aliases
+   - Detailed examples, migration guides, and complete feature documentation
+
+Both files must be kept synchronized with the official SDK to ensure accuracy for developers working offline or needing quick reference.
+
+### When to Update SDK Documentation
+**Triggers for documentation updates:**
+1. **User explicitly requests**: "update SDK documentation", "sync with online SDK", "refresh SDK info"
+2. **Version discrepancies discovered**: When current SDK version differs from documented version
+3. **Missing functionality reported**: When script development reveals undocumented SDK features
+4. **Periodic maintenance**: Quarterly reviews recommended for major SDK updates
+5. **Migration needs**: When switching between SDK versions for compatibility
+
+### Update Process Protocol
+
+#### Step 1: Discover Current SDK Version
+**CRITICAL: Always determine the current SDK version before beginning updates**
+
+```bash
+# Use mcp_mcp-web-snaps_website_snapshot to capture the main SDK page
+# URL: https://www.waze.com/editor/sdk/modules/index.html
+# Look for version information in page title or header
+```
+
+**Version Detection Pattern:**
+- Page title format: "WME JavaScript SDK v2.XXX-X-gXXXXXXXXXX - WME SDK"
+- Compare with current documented version in both documentation files:
+  - Quick reference: `WME_SDK_DOCUMENTATION.md` header
+  - Complete reference: `WME_SDK_COMPLETE_OFFLINE_REFERENCE.md` header
+- Document version changes in update process
+
+#### Step 2: Systematic Documentation Exploration
+**MANDATORY: Follow this exact sequence for comprehensive coverage**
+
+1. **Main SDK Index**:
+   ```bash
+   mcp_mcp-web-snaps_website_snapshot https://www.waze.com/editor/sdk/modules/index.html
+   ```
+
+2. **Core Module Discovery**:
+   - Capture all module links from main page
+   - Systematically snapshot each module page
+   - Document new modules not in current reference
+
+3. **Class and Interface Deep Dive**:
+   ```bash
+   # For each class/interface found, capture detailed pages
+   mcp_mcp-web-snaps_website_snapshot https://www.waze.com/editor/sdk/classes/[ClassName].html
+   mcp_mcp-web-snaps_website_snapshot https://www.waze.com/editor/sdk/interfaces/[InterfaceName].html
+   ```
+
+4. **Type Definitions and Constants**:
+   - Capture type alias pages
+   - Document new constants and variables
+   - Update existing type definitions
+
+#### Step 3: Documentation Structure Update
+
+**File-Specific Update Approach:**
+
+**A. Quick Reference (`WME_SDK_DOCUMENTATION.md`):**
+- Update version numbers in header
+- Update essential examples if API changes
+- Update module table links if structure changes
+- Keep content minimal - refer to comprehensive docs for details
+
+**B. Complete Reference (`WME_SDK_COMPLETE_OFFLINE_REFERENCE.md`):**
+- **ALWAYS maintain the 7-part structure of the offline reference:**
+
+1. **Part 1: SDK Overview & Core Classes**
+   - Update version numbers throughout
+   - Add new core classes discovered
+   - Update existing class method signatures
+
+2. **Part 2: Data Model Classes**
+   - Add new data model classes
+   - Update method signatures and parameters
+   - Document new properties and events
+
+3. **Part 3: UI & Interaction Classes**
+   - Update UI component changes
+   - Add new interaction methods
+   - Document new event types
+
+4. **Part 4: Interfaces**
+   - Add newly discovered interfaces
+   - Update existing interface properties
+   - Maintain alphabetical organization
+
+5. **Part 5: Type Aliases & Constants**
+   - Add new type definitions
+   - Update constant values
+   - Document new variables
+
+6. **Part 6: Complete API Reference**
+   - Update practical examples with new syntax
+   - Add examples for new functionality
+   - Update best practices based on changes
+
+7. **Part 7: Error Handling & Migration**
+   - Add migration notes for version changes
+   - Update error handling patterns
+   - Document breaking changes
+
+#### Step 4: Validation and Testing
+**REQUIRED: Validate documentation accuracy against actual SDK**
+
+1. **Cross-Reference Validation**:
+   - Compare method signatures between versions
+   - Verify parameter types and requirements
+   - Check for deprecated methods or properties
+
+2. **Practical Example Updates**:
+   - Test code examples against new SDK version
+   - Update deprecated patterns
+   - Add examples for new functionality
+
+3. **Breaking Changes Documentation**:
+   - Clearly mark deprecated features
+   - Document migration paths for breaking changes
+   - Update version compatibility notes
+
+#### Step 5: Change Documentation
+**MANDATORY: Document all changes made during update process**
+
+**A. Quick Reference Updates:**
+- Update version number in header
+- Note significant API changes in overview section
+- Update links if comprehensive documentation structure changes
+
+**B. Complete Reference Updates:**
+- Add a "Documentation Update History" section to track changes:
+
+```markdown
+## Documentation Update History
+
+### [Current Date] - SDK v[New Version] Update
+**Updated by**: GitHub Copilot
+**Trigger**: [User request/version discovery/periodic maintenance]
+**Changes made**:
+- ✅ Updated from SDK v[Old Version] to v[New Version]
+- ✅ Added [X] new classes: [Class names]
+- ✅ Added [X] new interfaces: [Interface names]
+- ✅ Updated [X] existing methods with new signatures
+- ✅ Added [X] new type definitions
+- ✅ Documented [X] breaking changes with migration paths
+- ✅ Updated [X] practical examples for compatibility
+
+**New functionality discovered**:
+- [List new features found]
+
+**Deprecated functionality**:
+- [List deprecated methods/properties]
+
+**Migration notes**:
+- [Key points for developers updating their scripts]
+```
+
+### Update Implementation Strategy
+
+#### Incremental vs. Complete Replacement
+**Decision Matrix**:
+
+- **Minor Version Updates** (v2.309 → v2.310):
+  - Use incremental updates with `replace_string_in_file`
+  - Focus on specific sections with changes
+  - Maintain existing structure and examples
+
+- **Major Version Updates** (v2.x → v3.x):
+  - Consider complete documentation replacement
+  - Backup current version before starting
+  - Implement comprehensive restructuring if needed
+
+#### Content Length Management
+**CRITICAL: Manage response length to avoid truncation**
+
+1. **Chunked Updates**: Process documentation in sections when dealing with large changes
+2. **Focused Responses**: Provide section-by-section updates rather than complete rewrites
+3. **Summary First**: Always provide change summary before detailed implementation
+4. **User Confirmation**: Ask for confirmation on major structural changes
+
+### Error Handling During Updates
+
+#### Common Issues and Solutions
+
+1. **Website Accessibility Problems**:
+   ```bash
+   # If main SDK site unavailable, document this clearly
+   # Fall back to cached/archived versions if available
+   # Note limitations in updated documentation
+   ```
+
+2. **Version Detection Failures**:
+   - Document inability to determine current version
+   - Provide manual version checking instructions
+   - Note uncertainty in documentation accuracy
+
+3. **Incomplete Information Capture**:
+   - Clearly mark sections with incomplete information
+   - Document which areas need manual verification
+   - Provide URLs for manual checking
+
+#### Quality Assurance Checklist
+**Before completing documentation update:**
+
+**Quick Reference File (`WME_SDK_DOCUMENTATION.md`):**
+- [ ] ✅ Version number updated in header
+- [ ] ✅ Essential examples updated for API changes
+- [ ] ✅ Module table links verified and updated
+- [ ] ✅ Cross-references to complete documentation maintained
+
+**Complete Reference File (`WME_SDK_COMPLETE_OFFLINE_REFERENCE.md`):**
+- [ ] ✅ Version number updated throughout document
+- [ ] ✅ All 7 sections reviewed and updated as needed
+- [ ] ✅ New functionality properly documented with examples
+- [ ] ✅ Deprecated functionality clearly marked
+- [ ] ✅ Breaking changes documented with migration paths
+- [ ] ✅ Update history section added/updated
+- [ ] ✅ Cross-references between sections maintained
+- [ ] ✅ Code examples validated for syntax correctness
+- [ ] ✅ User informed of completion and key changes
+
+### Communication Protocol
+
+#### Progress Updates During Long Updates
+```markdown
+📋 **SDK Documentation Update Progress**
+
+**Phase**: [Current phase - Discovery/Analysis/Implementation]
+**Version**: Updating from v[Old] to v[New]
+**Progress**: [X] of [Y] sections completed
+
+**Discoveries so far**:
+- [Key findings]
+
+**Next steps**:
+- [What's coming next]
+```
+
+#### Completion Summary
+```markdown
+✅ **SDK Documentation Update Complete**
+
+**Updated Files**: 
+- `WME_SDK_DOCUMENTATION.md` (Quick Reference)
+- `WME_SDK_COMPLETE_OFFLINE_REFERENCE.md` (Complete Reference)
+
+**Version**: Now reflects SDK v[New Version]
+**Key Changes**: [Major updates discovered]
+**Ready for use**: Both quick reference and complete offline documentation updated and validated
+
+**For developers**: [Key migration/usage notes]
+```
+
+This process ensures both the quick reference and comprehensive offline SDK documentation remain accurate, up-to-date, and useful for development work even when internet access is limited or when quick reference is needed during coding sessions.
