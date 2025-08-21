@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.21.018
+// @version      2025.08.22.002
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -59,7 +59,8 @@
         alertContainer: null, // Cache for alert container
         relockContainer: null, // Cache for main relock container
         roadTypeContainers: {}, // Cache for road type value containers
-        allSegmentsCheckbox: null // Cache for all segments checkbox
+        allSegmentsCheckbox: null, // Cache for all segments checkbox
+        toggleAllCheckboxesIcon: null // Cache for toggle all checkboxes icon
     };
 
     const REQUEST_TIMEOUT = 20000; // in ms
@@ -493,6 +494,12 @@
                 '.rl-hide-button { cursor: pointer; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: #666; font-size: 12px; margin-left: auto; margin-bottom: 8px; }',
                 '.rl-hide-button:hover { color: #333; }',
                 '.rl-version-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; margin-right: 5px; }',
+                '.rl-toggle-all-container { display: flex; align-items: center; margin-bottom: 8px; margin-right: 5px; padding: 5px 0; border-bottom: 1px solid #ddd; gap: 8px; }',
+                '.rl-toggle-all-icon { cursor: pointer; font-size: 16px; color: #666; transition: color 0.2s ease; }',
+                '.rl-toggle-all-icon:hover { color: #333; }',
+                '.rl-toggle-all-icon.all-checked { color: #4CAF50; }',
+                '.rl-toggle-all-icon.some-checked { color: #FF9800; }',
+                '.rl-section-title { font-size: 85%; font-weight: bold; }',
             ];
 
             try {
@@ -1032,7 +1039,6 @@
             const { tabLabel, tabPane } = await wmeSDK.Sidebar.registerScriptTab();
             const relockContent = document.createElement('div');
             const relockTitle = document.createElement('wz-overline');
-            const relockSubTitle = document.createElement('wz-h7');
             const rulesSubTitle = document.createElement('wz-h7');
             const relockAllbutton = document.createElement('wz-button');
             const infoBox = document.createElement('p');
@@ -1090,8 +1096,7 @@
                     localStorage.setItem(ID_KEYS.MSG_HIDE, '1');
                 }
             };
-            relockSubTitle.textContent = 'Bad locks found (limited to ' + FIX_LIMIT_COUNT + ' per pass):';
-            // Removed unnecessary ID - element is referenced directly
+
             rulesSubTitle.textContent = 'Active rules';
             versionTitle.textContent = 'Version ' + SCRIPT_VERSION;
             
@@ -1149,6 +1154,82 @@
             respectRoutingLabel.className = 'rl-label';
 
             resultsCntr.className = 'rl-container';
+            
+            // Create toggle all checkboxes container and icon
+            const toggleAllContainer = document.createElement('div');
+            toggleAllContainer.className = 'rl-toggle-all-container';
+            
+            const toggleAllIcon = document.createElement('i');
+            toggleAllIcon.className = 'fa fa-check-square rl-toggle-all-icon';
+            toggleAllIcon.title = 'Toggle all road type checkboxes';
+            
+            const sectionTitle = document.createElement('span');
+            sectionTitle.textContent = 'Bad locks found (limited to ' + FIX_LIMIT_COUNT + ' per pass):';
+            sectionTitle.className = 'rl-section-title';
+
+            // Cache the toggle icon for performance
+            cachedElements.toggleAllCheckboxesIcon = toggleAllIcon;
+            
+            /**
+             * Updates the toggle icon appearance based on checkbox states
+             */
+            function updateToggleIconState() {
+                const checkboxes = Object.values(cachedElements.checkboxElements);
+                const checkedCount = checkboxes.filter(cb => cb && cb.checked).length;
+                const totalCount = checkboxes.length;
+                
+                if (checkedCount === 0) {
+                    toggleAllIcon.className = 'fa fa-square-o rl-toggle-all-icon';
+                    toggleAllIcon.title = 'Select all road types';
+                } else if (checkedCount === totalCount) {
+                    toggleAllIcon.className = 'fa fa-check-square rl-toggle-all-icon all-checked';
+                    toggleAllIcon.title = 'Unselect all road types';
+                } else {
+                    toggleAllIcon.className = 'fa fa-minus-square rl-toggle-all-icon some-checked';
+                    toggleAllIcon.title = 'Select all road types';
+                }
+            }
+            
+            /**
+             * Toggles all road type checkboxes
+             */
+            function toggleAllCheckboxes() {
+                return ErrorHandler.wrapSync(() => {
+                    const checkboxes = Object.values(cachedElements.checkboxElements);
+                    const checkedCount = checkboxes.filter(cb => cb && cb.checked).length;
+                    const shouldCheck = checkedCount === 0;
+                    
+                    // Toggle all checkboxes
+                    Object.entries(cachedElements.checkboxElements).forEach(([sdkType, checkbox]) => {
+                        if (checkbox) {
+                            checkbox.checked = shouldCheck;
+                            
+                            // Update localStorage and roadTypeConfig
+                            const idPrefix = ID_KEYS.ELM_PREFIX + sdkType;
+                            const storageKey = idPrefix + ID_KEYS.CHECKBOX_SUFFIX;
+                            localStorage.setItem(storageKey, shouldCheck.toString());
+                            
+                            // Update scan property in roadTypeConfig
+                            const roadTypeEntry = Object.values(roadTypeConfig).find(rt => rt.sdkType === sdkType);
+                            if (roadTypeEntry) {
+                                roadTypeEntry.scan = shouldCheck;
+                            }
+                        }
+                    });
+                    
+                    // Update toggle icon state
+                    updateToggleIconState();
+                    
+                    // Trigger rescan
+                    scanArea();
+                }, 'Toggle All Checkboxes', ErrorHandler.SEVERITY.WARNING)();
+            }
+            
+            toggleAllIcon.onclick = toggleAllCheckboxes;
+            toggleAllContainer.appendChild(toggleAllIcon);
+            toggleAllContainer.appendChild(sectionTitle);
+            resultsCntr.appendChild(toggleAllContainer);
+            
             Object.entries(roadTypeConfig).forEach(([key, value]) => {
                 const rowContainer = document.createElement('div');
                 rowContainer.className = 'rl-flex-row';
@@ -1169,6 +1250,10 @@
                         localStorage.setItem(storageKey, checkboxElement.checked.toString());
                         // Update scan property directly for immediate use
                         roadTypeConfig[roadTypeKey].scan = checkboxElement.checked;
+                        
+                        // Update toggle icon state when individual checkbox changes
+                        updateToggleIconState();
+                        
                         scanArea();
                     };
                 })(key, idPrefix + ID_KEYS.CHECKBOX_SUFFIX);
@@ -1308,10 +1393,7 @@
             
             // Append scan counter container (created earlier)
             relockContent.appendChild(scanCounterContainer);
-            
-            relockContent.appendChild(relockSubTitle);
             relockContent.appendChild(resultsCntr);
-            
             relockContent.appendChild(rulesSubTitle);
             relockContent.appendChild(rulesCntr);
 
@@ -1319,6 +1401,9 @@
 
             // Initialize ProgressManager after UI elements are in the DOM
             ProgressManager.init(relockContent);
+            
+            // Set initial toggle icon state after all checkboxes are cached
+            updateToggleIconState();
 
             const eventHandlers = [];
 
