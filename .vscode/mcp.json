@@ -1,0 +1,16 @@
+{
+	"servers": {
+		"mcp-web-snapshot": {
+			"type": "stdio",
+			"command": "uv",
+			"args": [
+				"--directory",
+				"~/Projects/mcp-web-snapshot",
+				"run",
+				"python",
+				"src/server.py"
+			]
+		}
+	},
+	"inputs": []
+}
