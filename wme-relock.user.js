@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.22.004
+// @version      2025.08.23.001
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -501,7 +501,7 @@
                 '.rl-toggle-all-icon.some-checked { color: #FF9800; }',
                 '.rl-section-title { font-size: 85%; font-weight: bold; }',
                 '.rl-title-version-container { display: flex; flex-direction: column; margin-bottom: 5px; margin-right: 5px; padding: 8px 12px; border-radius: 6px; position: relative; overflow: hidden; }',
-                '.rl-title-version-container::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to bottom, rgba(0, 87, 183, 0.15) 0%, rgba(0, 87, 183, 0.15) 50%, rgba(255, 215, 0, 0.15) 50%, rgba(255, 215, 0, 0.15) 100%); z-index: -1; }',
+                '.rl-title-version-container::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to bottom, rgba(0, 87, 183, 0.15) 0%, rgba(0, 87, 183, 0.7) 50%, rgba(255, 215, 0, 0.7) 50%, rgba(255, 215, 0, 0.15) 100%); z-index: -1; }',
                 '.rl-title-version-container .rl-title-content { display: flex; align-items: center; margin-bottom: 4px; }',
                 '.rl-title-version-container .rl-version-content { display: flex; align-items: center; justify-content: space-between; gap: 8px; }',
             ];
