@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Relock
-// @version      2025.08.23.001
+// @version      2026.08.04.001
 // @description  Fork of the original WME LevelReset script by Broos Gert '2015. The script is for making re-locking segments and POI to their appropriate lock level easy & quick. Supports all road types, venues and custom locking rules for a specific countries and cities.
 // @author       madnut, Copilot
 // @match        https://beta.waze.com/*editor*
@@ -67,6 +67,8 @@
     const RULES_HASH = "AKfycbyBy5e4J1u3RbRK4cNWbUJ-sDL2aLDUIMH1glbf6xOEEMO0Z4wl2wTKIRw0HP5KDbwR6A";
 
     // Default lock levels
+    // Set any entry to 'HRCS' to lock dynamically to the highest lock of connected
+    // segments with a different road type (see getHighestSegLock).
     const DEFAULT_STREET_LOCKS = {
         STREET: 1,
         PRIMARY_STREET: 1,
@@ -690,6 +692,88 @@
         }
 
         /**
+         * Calculate the HRCS (Highest Rank of Connected Segments) lock level for a segment.
+         * The HRCS lock is the highest lockRank among all segments connected to the given
+         * segment through a chain of segments of the SAME road type (i.e., the lock level
+         * to match at road-type change boundaries)
+         * @param {number|string} segmentId - ID of the segment to calculate the HRCS lock for
+         * @returns {number} The calculated 0-based lock rank (limited to L6)
+         */
+        function getHighestSegLock(segmentId) {
+            return ErrorHandler.wrapSync(() => {
+                const segObj = wmeSDK.DataModel.Segments.getById({ segmentId });
+                if (!segObj) {
+                    console.warn(`${SCRIPT_LOG_PREFIX} Segment object with ID ${segmentId} not found in DataModel.Segments.`);
+                    return 1; // Default lock level if segment not found
+                }
+                const segType = segObj.roadType;
+                const checkedSegs = [];
+                let forwardLock = null;
+                let reverseLock = null;
+
+                function processForNode(forwardID) {
+                    checkedSegs.push(forwardID);
+                    const seg = wmeSDK.DataModel.Segments.getById({ segmentId: forwardID });
+                    if (!seg) return forwardLock;
+                    const forNodeId = seg.toNodeId;
+                    if (!forNodeId) return forwardLock;
+
+                    // Get all segments connected to this node
+                    const allSegs = wmeSDK.DataModel.Segments.getAll();
+                    const forNodeSegs = allSegs.filter((s) => s.fromNodeId === forNodeId || s.toNodeId === forNodeId).map((s) => s.id);
+
+                    // Remove the current segment from the list
+                    const filteredSegs = forNodeSegs.filter((id) => id !== forwardID);
+
+                    for (let i = 0; i < filteredSegs.length; i++) {
+                        const conSegObj = wmeSDK.DataModel.Segments.getById({ segmentId: filteredSegs[i] });
+                        if (!conSegObj) continue;
+                        if (conSegObj.roadType !== segType) {
+                            forwardLock = Math.max(conSegObj.lockRank ?? 0, forwardLock ?? 0);
+                        } else if (!checkedSegs.includes(conSegObj.id)) {
+                            const tempRank = processForNode(conSegObj.id);
+                            forwardLock = Math.max(tempRank ?? 0, forwardLock ?? 0);
+                        }
+                    }
+                    return forwardLock ?? 0;
+                }
+
+                function processRevNode(reverseID) {
+                    checkedSegs.push(reverseID);
+                    const seg = wmeSDK.DataModel.Segments.getById({ segmentId: reverseID });
+                    if (!seg) return reverseLock;
+                    const revNodeId = seg.fromNodeId;
+                    if (!revNodeId) return reverseLock;
+
+                    // Get all segments connected to this node
+                    const allSegs = wmeSDK.DataModel.Segments.getAll();
+                    const revNodeSegs = allSegs.filter((s) => s.fromNodeId === revNodeId || s.toNodeId === revNodeId).map((s) => s.id);
+
+                    // Remove the current segment from the list
+                    const filteredSegs = revNodeSegs.filter((id) => id !== reverseID);
+
+                    for (let i = 0; i < filteredSegs.length; i++) {
+                        const conSegObj = wmeSDK.DataModel.Segments.getById({ segmentId: filteredSegs[i] });
+                        if (!conSegObj) continue;
+                        if (conSegObj.roadType !== segType) {
+                            reverseLock = Math.max(conSegObj.lockRank ?? 0, reverseLock ?? 0);
+                        } else if (!checkedSegs.includes(conSegObj.id)) {
+                            const tempRank = processRevNode(conSegObj.id);
+                            reverseLock = Math.max(tempRank ?? 0, reverseLock ?? 0);
+                        }
+                    }
+                    return reverseLock ?? 0;
+                }
+
+                // ponytail: getAll()+filter per recursion level is O(n) on the whole map per call.
+                // Fine for on-screen scans; if HRCS on many segments feels slow, precompute a
+                // node -> segmentIds adjacency map once per scan and reuse it here.
+                const calculatedLock = Math.max(processForNode(segmentId), processRevNode(segmentId));
+                return Math.min(calculatedLock, 6); // Limit to L6
+            }, 'HRCS Lock Calculation', ErrorHandler.SEVERITY.WARNING)();
+        }
+
+        /**
          * Determines if an object (segment or venue) needs lock level adjustment
          * @param {Object} obj - The segment or venue object
          * @param {number} targetLockLevel - The desired lock level
@@ -894,7 +978,12 @@
 
                         const cityRules = cityID && rulesDB[topCountry.abbr] && rulesDB[topCountry.abbr][cityID];
                         const stLocks = cityRules ? cityRules.Locks : ABBR;
-                        const desiredLockLevel = stLocks[curStreet.sdkType] - 1;
+                        const lockRule = stLocks[curStreet.sdkType];
+                        // 'HRCS' rule value: dynamically lock to the highest lock of connected
+                        // segments with a different road type (see getHighestSegLock)
+                        const desiredLockLevel = lockRule === 'HRCS'
+                            ? getHighestSegLock(segment.id)
+                            : lockRule - 1;
 
                         // Check if segment needs lock adjustment using centralized logic
                         if (needsLockAdjustment(segment, desiredLockLevel)) {
